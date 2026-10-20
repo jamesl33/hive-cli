@@ -1,0 +1,57 @@
+#!/bin/sh
+# Set the Hive thermostat to whatever the schedule says for right now.
+#
+# Reads "HH:MM <temp|off>" lines from $HIVE_SCHEDULE (default /etc/hive/schedule), picks the latest
+# slot at or before the current time (wrapping to the last slot of the day before midnight's first
+# slot), then runs 'hive manual <temp>' or 'hive off'. Running it twice is harmless, so it is safe
+# to call from a timer, after a reboot, or by hand.
+
+set -eu
+
+schedule=${HIVE_SCHEDULE:-/etc/hive/schedule}
+now=$(date +%H%M)
+
+current=""
+last=""
+current_slot=""
+last_slot=""
+
+while read -r slot value _; do
+	case "$slot" in
+		'' | \#*) continue ;;
+	esac
+
+	case "$slot" in
+		[0-2][0-9]:[0-5][0-9]) ;;
+		*) echo "hive-schedule: bad time '$slot' in $schedule" >&2; exit 2 ;;
+	esac
+
+	hm=$(echo "$slot" | tr -d :)
+	last=$value
+	last_slot=$slot
+
+	# Prefix with 1 so 0930 can never be read as octal
+	if [ "1$hm" -le "1$now" ]; then
+		current=$value
+		current_slot=$slot
+	fi
+done <"$schedule"
+
+if [ -z "$last" ]; then
+	echo "hive-schedule: no slots in $schedule" >&2
+	exit 2
+fi
+
+# Before the first slot of the day, yesterday's last slot still applies
+if [ -z "$current" ]; then
+	current=$last
+	current_slot=$last_slot
+fi
+
+if [ "$current" = "off" ]; then
+	echo "hive-schedule: $current_slot slot -> off"
+	exec hive off
+fi
+
+echo "hive-schedule: $current_slot slot -> ${current}°C"
+exec hive manual "$current"

@@ -1,0 +1,33 @@
+[Unit]
+Description=Set the Hive thermostat to the scheduled temperature
+Documentation=https://github.com/jamesl33/hive-cli/tree/master/deploy/systemd
+# Wall-clock time must be right before picking a slot (the Pi Zero has no RTC)
+Wants=network-online.target time-sync.target
+After=network-online.target time-sync.target mosquitto.service zigbee2mqtt.service
+# Retry for up to ~15 minutes if the broker or receiver isn't answering yet
+StartLimitIntervalSec=20min
+StartLimitBurst=30
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/etc/hive/env
+Environment=HIVE_SCHEDULE=/etc/hive/schedule
+ExecStart=/usr/local/bin/hive-schedule
+Restart=on-failure
+RestartSec=30s
+TimeoutStartSec=2min
+
+# Hardening: it only needs to read its config and talk to the broker
+DynamicUser=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+NoNewPrivileges=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+LockPersonality=yes
+CapabilityBoundingSet=

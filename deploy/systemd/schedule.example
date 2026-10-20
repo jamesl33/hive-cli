@@ -1,0 +1,8 @@
+# Heating schedule, read by hive-schedule. One slot per line: HH:MM <temp|off>, sorted by time.
+# Temperatures are 5–32°C in 0.5 steps. The last slot carries on past midnight until the first.
+# Slot times must fall on :00, :15, :30 or :45, the times hive-schedule.timer fires.
+
+06:30 16.5   # warm up before waking
+09:30 15.5   # coast
+17:00 16.5   # evening
+21:00 15     # overnight floor

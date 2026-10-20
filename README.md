@@ -40,6 +40,10 @@ make install
 2. Install an MQTT broker (`apt install mosquitto`) and [Zigbee2MQTT](https://www.zigbee2mqtt.io/guide/installation/).
 3. Unplug the Hive hub, then pair the receiver and thermostat following the [Zigbee2MQTT SLT3C instructions](https://www.zigbee2mqtt.io/devices/SLT3C.html). The Hive app stops working for these devices.
 
+## Scheduling
+
+To run a heating schedule on the Pi, see [deploy/systemd](deploy/systemd).
+
 ## Notes
 
 - Hive encodes modes in `system_mode` plus `temperature_setpoint_hold`, which the generic Zigbee2MQTT climate entity doesn't handle. `hive` sends the payloads used by [HA-Hive-Local-Thermostat](https://github.com/andrew-codechimp/HA-Hive-Local-Thermostat).
