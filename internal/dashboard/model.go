@@ -39,6 +39,12 @@ var windows = []time.Duration{
 // defaultWindow is the position in windows shown at start.
 const defaultWindow = 1
 
+// helpText lists the keys.
+const helpText = `w   next time window
+W   previous time window
+?   toggle this help
+q   quit`
+
 // Source is a live stream of device reports.
 type Source interface {
 	// Next blocks until a device reports its state.
@@ -66,6 +72,7 @@ type Model struct {
 	height    int
 	window    int // position in windows
 	connected bool
+	help      bool
 	err       error
 }
 
@@ -113,8 +120,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width, m.height = msg.Width, msg.Height
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "q", "ctrl+c", "esc":
+		case "esc":
+			if m.help {
+				m.help = false
+
+				return m, nil
+			}
+
 			return m, tea.Quit
+		case "q", "ctrl+c":
+			return m, tea.Quit
+		case "?":
+			m.help = !m.help
 		case "w", "W":
 			step := 1
 			if msg.String() == "W" {
@@ -156,43 +173,80 @@ func (m Model) View() string {
 	now := time.Now()
 	from := now.Add(-windows[m.window])
 
-	title := lipgloss.NewStyle().Bold(true).Render("Dashboard")
-	title += fmt.Sprintf("  last %s  (w/W: change window, q: quit)", formatWindow(windows[m.window]))
+	if m.help {
+		return box("Help", helpText, m.width)
+	}
+
+	devices := "Devices"
 
 	if !m.connected {
-		title += lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Render("  reconnecting to broker...")
+		devices += lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Render("  reconnecting to broker...")
 	}
 
 	if len(m.store.Order) == 0 {
-		return title + "\n\nWaiting for devices to report; sensors only send when their reading changes."
+		msg := "Waiting for devices to report; sensors only send when their reading changes."
+
+		return box(devices, msg, m.width)
 	}
 
 	batteries := m.store.batteries()
-	rows := []string{title, m.store.legend(now)}
+	rows := []string{box(devices, m.store.legend(now), m.width)}
 
-	// Besides the charts there are the title and legend, a heading for each chart, two boiler rows
-	// and the battery heading and rows.
-	tempH, humH := m.height-len(rows)-1-2-1-len(batteries), 0
+	// Besides the charts there are the legend row, the two boiler rows, the battery rows and the
+	// borders of each box.
+	hasHumidity := len(m.store.Series[Humidity]) > 0
+	boxes := 3 + boolInt(hasHumidity) + boolInt(len(batteries) > 0)
+	tempH, humH := m.height-1-2*boxes-2-len(batteries), 0
 
-	if len(m.store.Series[Humidity]) > 0 {
-		free := tempH - 1
-		tempH = free * 3 / 5
-		humH = free - tempH
+	if hasHumidity {
+		tempH, humH = tempH*3/5, tempH-tempH*3/5
 	}
 
-	temp := m.store.renderChart(Temperature, m.width, tempH, from, now)
-	rows = append(rows, "Temperature °C", temp.view)
+	inner := m.width - 2
+	span := "(" + formatWindow(windows[m.window]) + ")"
+
+	temp := m.store.renderChart(Temperature, inner, tempH, from, now)
+	rows = append(rows, box("Temperature °C "+span, temp.view, m.width))
 
 	if humH > 0 {
-		humidity := m.store.renderChart(Humidity, m.width, humH, from, now)
-		rows = append(rows, "Humidity %", humidity.view)
+		humidity := m.store.renderChart(Humidity, inner, humH, from, now)
+		rows = append(rows, box("Humidity % "+span, humidity.view, m.width))
 	}
 
-	rows = append(rows, m.store.boilerRows(temp, from, now)...)
-	rows = append(rows, "Battery")
-	rows = append(rows, batteries...)
+	rows = append(rows, box("Boiler "+span, strings.Join(m.store.boilerRows(temp, from, now), "\n"), m.width))
+
+	if len(batteries) > 0 {
+		rows = append(rows, box("Battery", strings.Join(batteries, "\n"), m.width))
+	}
 
 	return lipgloss.NewStyle().MaxWidth(m.width).Render(strings.Join(rows, "\n"))
+}
+
+// box draws the body inside a border of the width, with the title set into the top edge.
+func box(title, body string, width int) string {
+	inner := width - 2
+	top := "┌─ " + title + " " + strings.Repeat("─", max(inner-lipgloss.Width(title)-3, 0)) + "┐"
+
+	lines := []string{top}
+
+	clip := lipgloss.NewStyle().MaxWidth(inner)
+
+	for line := range strings.SplitSeq(body, "\n") {
+		line = clip.Render(line)
+		lines = append(lines, "│"+line+strings.Repeat(" ", max(inner-lipgloss.Width(line), 0))+"│")
+	}
+
+	lines = append(lines, "└"+strings.Repeat("─", inner)+"┘")
+
+	return strings.Join(lines, "\n")
+}
+
+func boolInt(b bool) int {
+	if b {
+		return 1
+	}
+
+	return 0
 }
 
 // formatWindow formats a window as minutes or hours, e.g. 15m or 3h.
