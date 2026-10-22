@@ -97,6 +97,16 @@ func TestStoreMergesReceiverState(t *testing.T) {
 	assert.Equal(t, 18.5, temp.Value)
 }
 
+func TestStoreOrdersDevicesByName(t *testing.T) {
+	s := NewStore(receiver)
+
+	for _, name := range []string{"office", "bedroom", "office", "hall"} {
+		s.Apply(update(t, name, time.Unix(1, 0), `{"temperature":20}`))
+	}
+
+	assert.Equal(t, []string{"bedroom", "hall", "office"}, s.Order)
+}
+
 func TestStoreIgnoresUnrelatedReport(t *testing.T) {
 	s := NewStore(receiver)
 	s.Apply(update(t, "hive", time.Unix(1, 0), `{"linkquality":90}`))

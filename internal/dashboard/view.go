@@ -19,7 +19,7 @@ const (
 	mediumBattery = 40
 )
 
-// palette is the colours of the devices, in the order they are first seen.
+// palette is the colours of the devices, in the order of their names.
 var palette = []lipgloss.Color{"39", "208", "42", "205", "220", "141", "51", "203"}
 
 // Boiler styles, by state.

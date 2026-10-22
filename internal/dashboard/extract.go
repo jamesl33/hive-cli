@@ -46,7 +46,7 @@ type Store struct {
 	// Receiver is the Hive receiver; it reports the boiler and the Hive temperature.
 	Receiver hive.Receiver
 
-	// Order is the devices in the order they were first seen, so each keeps its colour.
+	// Order is the devices sorted by name, so each gets the same colour on every run.
 	Order []string
 
 	// Series is the samples of each device, by metric.
@@ -91,8 +91,9 @@ func (s *Store) add(sample Sample) {
 	series := s.Series[sample.Metric]
 	series[sample.Device] = series[sample.Device].Append(Point{At: sample.At, Value: sample.Value})
 
-	if !slices.Contains(s.Order, sample.Device) {
-		s.Order = append(s.Order, sample.Device)
+	i, found := slices.BinarySearch(s.Order, sample.Device)
+	if !found {
+		s.Order = slices.Insert(s.Order, i, sample.Device)
 	}
 }
 
