@@ -378,3 +378,23 @@ func TestDownsample(t *testing.T) {
 		})
 	}
 }
+
+func TestClampMovesLeadingPointOntoStart(t *testing.T) {
+	from := time.Unix(10, 0)
+	s := Series{{At: time.Unix(0, 0), Value: 0}, {At: time.Unix(20, 0), Value: 20}, {At: time.Unix(30, 0), Value: 30}}
+
+	got := clamp(s, from)
+
+	assert.Equal(t, Point{At: from, Value: 10}, got[0])
+	assert.Equal(t, time.Unix(0, 0), s[0].At)
+	assert.Equal(t, s[1:], got[1:])
+}
+
+func TestClampLoneOldPointOnceSpanned(t *testing.T) {
+	from, to := time.Unix(100, 0), time.Unix(200, 0)
+	s := Series{{At: time.Unix(10, 0), Value: 5}}
+
+	got := clamp(spanned(s, to), from)
+
+	assert.Equal(t, Series{{At: from, Value: 5}, {At: to, Value: 5}}, got)
+}

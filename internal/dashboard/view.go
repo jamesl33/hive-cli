@@ -3,6 +3,7 @@ package dashboard
 import (
 	"fmt"
 	"math"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -157,7 +158,7 @@ func (s *Store) renderChart(metric Metric, w, h int, from, to time.Time) chart {
 	)
 
 	for i, device := range s.Order {
-		points := spanned(downsample(visible(byDevice[device], from), from, to, w*2), to)
+		points := downsample(clamp(spanned(visible(byDevice[device], from), to), from), from, to, w*2)
 		for _, p := range points {
 			c.PushDataSet(device, timeserieslinechart.TimePoint{Time: p.At, Value: p.Value})
 		}
@@ -169,7 +170,7 @@ func (s *Store) renderChart(metric Metric, w, h int, from, to time.Time) chart {
 
 	for device, series := range targets {
 		name := device + " target"
-		for _, p := range spanned(downsample(stepped(visible(series, from)), from, to, w*2), to) {
+		for _, p := range downsample(clamp(spanned(stepped(visible(series, from)), to), from), from, to, w*2) {
 			c.PushDataSet(name, timeserieslinechart.TimePoint{Time: p.At, Value: p.Value})
 		}
 
@@ -187,6 +188,22 @@ func visible(s Series, from time.Time) Series {
 	i := sort.Search(len(s), func(i int) bool { return s[i].At.After(from) })
 
 	return s[max(i-1, 0):]
+}
+
+// clamp moves a leading point which lies before the time onto it, on the line to the next point, so
+// every line starts at the left edge of the chart however far back its last earlier report was.
+func clamp(s Series, from time.Time) Series {
+	if len(s) < 2 || !s[0].At.Before(from) || s[1].At.Before(from) {
+		return s
+	}
+
+	a, b := s[0], s[1]
+	frac := float64(from.Sub(a.At)) / float64(b.At.Sub(a.At))
+
+	out := slices.Clone(s)
+	out[0] = Point{At: from, Value: a.Value + (b.Value-a.Value)*frac}
+
+	return out
 }
 
 // downsample reduces the series to the lowest and highest point in each of the buckets which the span
