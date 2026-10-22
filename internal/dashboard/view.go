@@ -169,7 +169,7 @@ func (s *Store) renderChart(metric Metric, w, h int, from, to time.Time) chart {
 
 	for device, series := range targets {
 		name := device + " target"
-		for _, p := range spanned(downsample(visible(series, from), from, to, w*2), to) {
+		for _, p := range spanned(downsample(stepped(visible(series, from)), from, to, w*2), to) {
 			c.PushDataSet(name, timeserieslinechart.TimePoint{Time: p.At, Value: p.Value})
 		}
 
@@ -238,6 +238,28 @@ func downsample(s Series, from, to time.Time, buckets int) Series {
 
 	if last := s[len(s)-1]; out[len(out)-1] != last {
 		out = append(out, last)
+	}
+
+	return out
+}
+
+// stepped holds each value until the next point, so the line rises and falls in steps instead of
+// sloping across the gap between reports.
+func stepped(s Series) Series {
+	if len(s) == 0 {
+		return nil
+	}
+
+	out := make(Series, 0, 2*len(s))
+	out = append(out, s[0])
+
+	for _, p := range s[1:] {
+		prev := out[len(out)-1]
+		if prev.Value != p.Value {
+			out = append(out, Point{At: p.At, Value: prev.Value})
+		}
+
+		out = append(out, p)
 	}
 
 	return out

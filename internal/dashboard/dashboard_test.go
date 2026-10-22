@@ -217,6 +217,20 @@ func TestSpanned(t *testing.T) {
 	assert.Nil(t, spanned(nil, to))
 }
 
+func TestStepped(t *testing.T) {
+	s := Series{{At: time.Unix(10, 0), Value: 1}, {At: time.Unix(60, 0), Value: 2}, {At: time.Unix(90, 0), Value: 2}}
+
+	want := Series{
+		{At: time.Unix(10, 0), Value: 1},
+		{At: time.Unix(60, 0), Value: 1},
+		{At: time.Unix(60, 0), Value: 2},
+		{At: time.Unix(90, 0), Value: 2},
+	}
+
+	assert.Equal(t, want, stepped(s))
+	assert.Nil(t, stepped(nil))
+}
+
 func TestWindowCycles(t *testing.T) {
 	m := New(t.Context(), feed{}, NewStore(receiver))
 	start := m.window
