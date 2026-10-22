@@ -181,6 +181,24 @@ func TestViewShowsEverything(t *testing.T) {
 	}
 }
 
+func TestViewIsCached(t *testing.T) {
+	store := NewStore(receiver)
+	store.Apply(update(t, "hall", time.Now(), `{"temperature":18.2}`))
+
+	m := New(t.Context(), feed{}, store)
+	next, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	m = next.(Model)
+
+	first := m.View()
+	*m.cache = viewCache{key: m.viewKey(time.Now()), view: "cached", ok: true}
+
+	assert.Equal(t, "cached", m.View())
+
+	store.Apply(update(t, "hall", time.Now(), `{"temperature":19.2}`))
+	assert.NotEqual(t, "cached", m.View())
+	assert.NotEqual(t, first, m.View())
+}
+
 func TestViewWaitsForData(t *testing.T) {
 	m := New(t.Context(), feed{}, NewStore(receiver))
 	next, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})

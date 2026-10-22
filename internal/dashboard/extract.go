@@ -58,6 +58,9 @@ type Store struct {
 
 	// reports works out the measurements in each device report.
 	reports *Reports
+
+	// version changes whenever the series do, so a drawing can be reused until it does.
+	version uint64
 }
 
 // NewStore returns an empty store.
@@ -96,6 +99,7 @@ func (s *Store) Restore(dir string, from time.Time) error {
 
 	s.dir = dir
 	s.Series = make(map[Metric]map[string]Series)
+	s.version++
 
 	for _, sample := range append(samples, live...) {
 		s.add(sample)
@@ -145,6 +149,8 @@ func (s *Store) Reload(from time.Time) error {
 
 // add appends a sample to its series.
 func (s *Store) add(sample Sample) {
+	s.version++
+
 	if s.Series[sample.Metric] == nil {
 		s.Series[sample.Metric] = make(map[string]Series)
 	}

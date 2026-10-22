@@ -63,6 +63,24 @@ type errMsg struct{ err error }
 // tickMsg triggers a redraw.
 type tickMsg time.Time
 
+// viewKey is everything which changes what View draws. The bucket is the time in units of one chart
+// cell, as the chart looks the same until the time moves on by that much.
+type viewKey struct {
+	version       uint64
+	window        int
+	width, height int
+	help          bool
+	connected     bool
+	bucket        int64
+}
+
+// viewCache is the last drawing, which is reused for as long as its key matches.
+type viewCache struct {
+	key  viewKey
+	view string
+	ok   bool
+}
+
 // Model is the dashboard.
 type Model struct {
 	ctx       context.Context
@@ -74,11 +92,12 @@ type Model struct {
 	connected bool
 	help      bool
 	err       error
+	cache     *viewCache
 }
 
 // New returns a dashboard which displays the reports from the source.
 func New(ctx context.Context, source Source, store *Store) Model {
-	return Model{ctx: ctx, source: source, store: store, window: defaultWindow, connected: true}
+	return Model{ctx: ctx, source: source, store: store, window: defaultWindow, connected: true, cache: &viewCache{}}
 }
 
 // Err returns the failure which ended the dashboard, if any.
@@ -164,13 +183,45 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// View draws the dashboard.
+// cell returns the time covered by one cell of a chart, which is two braille dots wide.
+func (m Model) cell() time.Duration {
+	return windows[m.window] / time.Duration(max(m.width-2, 1)*2)
+}
+
+// viewKey returns what View would draw at the time depends on.
+func (m Model) viewKey(now time.Time) viewKey {
+	return viewKey{
+		version:   m.store.version,
+		window:    m.window,
+		width:     m.width,
+		height:    m.height,
+		help:      m.help,
+		connected: m.connected,
+		bucket:    now.UnixNano() / int64(m.cell()),
+	}
+}
+
+// View draws the dashboard, reusing the last drawing if nothing which it shows has changed.
 func (m Model) View() string {
+	now := time.Now()
+	key := m.viewKey(now)
+
+	if m.cache.ok && m.cache.key == key {
+		return m.cache.view
+	}
+
+	view := m.draw(now)
+	*m.cache = viewCache{key: key, view: view, ok: true}
+
+	return view
+}
+
+// draw draws the dashboard as it is at the time.
+func (m Model) draw(now time.Time) string {
 	if m.width < minWidth || m.height < minHeight {
 		return "Terminal too small"
 	}
 
-	now := time.Now()
 	from := now.Add(-windows[m.window])
 
 	if m.help {
