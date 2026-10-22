@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/signal"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/jamesl33/hive-cli/internal/dashboard"
@@ -93,20 +95,30 @@ func consume(ctx context.Context, feed *z2m.Feed, log *dashboard.Log) error {
 	}
 }
 
-// flushLoop writes the history to disk regularly until the context is cancelled.
+// flushLoop writes the history to disk regularly, and on SIGUSR1, until the context is cancelled.
 func flushLoop(ctx context.Context, log *dashboard.Log) {
 	t := time.NewTicker(flushEvery)
 	defer t.Stop()
 
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGUSR1)
+
+	defer signal.Stop(sigs)
+
 	for {
+		var now time.Time
+
 		select {
 		case <-ctx.Done():
 			return
-		case now := <-t.C:
-			err := log.Flush(now)
-			if err != nil {
-				fmt.Fprintln(os.Stderr, err)
-			}
+		case now = <-t.C:
+		case <-sigs:
+			now = time.Now()
+		}
+
+		err := log.Flush(now)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
 		}
 	}
 }
