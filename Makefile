@@ -8,7 +8,7 @@ build:
 
 .PHONY: install
 install:
-	@go install -ldflags "-X github.com/jamesl33/hive-cli/cmd.commit=$(COMMIT)" .
+	@go build -ldflags "-X github.com/jamesl33/hive-cli/cmd.commit=$(COMMIT)" -o $(or $(shell go env GOBIN),$(shell go env GOPATH)/bin)/hive
 
 .PHONY: test
 test:
