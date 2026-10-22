@@ -13,6 +13,7 @@ func TestUsageErrors(t *testing.T) {
 		{"manual", "99"},
 		{"boost"},
 		{"boost", "7h"},
+		{"dashboard", "extra"},
 	} {
 		rootCommand.SetArgs(args)
 		assert.Error(t, rootCommand.ExecuteContext(t.Context()), "%v", args)

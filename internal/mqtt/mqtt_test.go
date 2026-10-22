@@ -1,6 +1,7 @@
 package mqtt
 
 import (
+	paho "github.com/eclipse/paho.mqtt.golang"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -25,4 +26,13 @@ func TestBrokerURLInvalid(t *testing.T) {
 		_, err := brokerURL(in)
 		assert.Error(t, err, in)
 	}
+}
+
+func TestCloseTwice(t *testing.T) {
+	c := &Client{stop: make(chan struct{}), client: paho.NewClient(paho.NewClientOptions())}
+
+	assert.NotPanics(t, func() {
+		c.Close()
+		c.Close()
+	})
 }

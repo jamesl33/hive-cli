@@ -6,6 +6,7 @@ import (
 	"syscall"
 
 	"github.com/jamesl33/hive-cli/cmd/boost"
+	"github.com/jamesl33/hive-cli/cmd/dashboard"
 	"github.com/jamesl33/hive-cli/cmd/manual"
 	"github.com/jamesl33/hive-cli/cmd/off"
 	"github.com/jamesl33/hive-cli/cmd/schedule"
@@ -61,6 +62,7 @@ func init() {
 
 	rootCommand.AddCommand(
 		boost.NewBoost(&options),
+		dashboard.NewDashboard(&options),
 		manual.NewManual(&options),
 		off.NewOff(&options),
 		schedule.NewSchedule(&options),

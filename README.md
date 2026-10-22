@@ -22,6 +22,7 @@ hive manual 21      hold 21°C until told otherwise
 hive off            off; frost protection still applies
 hive schedule       follow the thermostat schedule (also ends a boost)
 hive boost 1h [22]  boost (default 18°C); 30, 45m, 1h30m...; max 6h
+hive dashboard      live TUI: temperature and humidity of every sensor, boiler on/idle/off, batteries
 ```
 
 - Flags: `--broker` (`HIVE_BROKER`, default `tcp://localhost:1883`, `mqtts://` for TLS), `--username` (`HIVE_USERNAME`), `--password` (`HIVE_PASSWORD`).

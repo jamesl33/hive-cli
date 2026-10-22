@@ -66,7 +66,7 @@ func Devices(ctx context.Context, c *mqtt.Client) ([]Device, error) {
 // next returns the next message, explaining a timeout in terms of the device list.
 func next(ctx context.Context, c *mqtt.Client, topic string) (mqtt.Message, error) {
 	m, err := c.Next(ctx, 0)
-	if errors.Is(err, mqtt.ErrTimeout) {
+	if errors.Is(err, mqtt.ErrTimeout) || errors.Is(err, context.DeadlineExceeded) {
 		return m, fmt.Errorf("no device list on %s within %s: is Zigbee2MQTT running?", topic, timeout)
 	}
 
