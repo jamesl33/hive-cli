@@ -17,6 +17,12 @@ const (
 	// lowBattery and mediumBattery are the percentages below which a battery is shown red and amber.
 	lowBattery    = 20
 	mediumBattery = 40
+
+	// staleAfter is how long a device can go without reporting before the legend greys it out.
+	staleAfter = 2 * time.Hour
+
+	// staleColor is the colour of a stale device in the legend.
+	staleColor = lipgloss.Color("240")
 )
 
 // palette is the colours of the devices, in the order of their names.
@@ -177,8 +183,22 @@ func spanned(s Series, to time.Time) Series {
 	return out
 }
 
-// legend lists each device with its colour and latest readings.
-func (s *Store) legend() string {
+// lastSeen returns when the device last reported a measurement, or the zero time if it never has.
+func (s *Store) lastSeen(device string) time.Time {
+	var seen time.Time
+
+	for _, byDevice := range s.Series {
+		if p, ok := byDevice[device].Last(); ok && p.At.After(seen) {
+			seen = p.At
+		}
+	}
+
+	return seen
+}
+
+// legend lists each device with its colour and latest readings; a device which has not reported for
+// staleAfter is greyed out and shows how long ago it did.
+func (s *Store) legend(now time.Time) string {
 	parts := make([]string, 0, len(s.Order))
 
 	for i, device := range s.Order {
@@ -192,7 +212,14 @@ func (s *Store) legend() string {
 			text += fmt.Sprintf(" %.0f%%", p.Value)
 		}
 
-		parts = append(parts, lipgloss.NewStyle().Foreground(color(i)).Render("● "+text))
+		style := lipgloss.NewStyle().Foreground(color(i))
+
+		if age := now.Sub(s.lastSeen(device)); age >= staleAfter {
+			text += fmt.Sprintf(" (%s ago)", formatWindow(age))
+			style = lipgloss.NewStyle().Foreground(staleColor)
+		}
+
+		parts = append(parts, style.Render("● "+text))
 	}
 
 	return strings.Join(parts, "  ")

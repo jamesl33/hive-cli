@@ -153,7 +153,7 @@ func (m Model) View() string {
 	}
 
 	batteries := m.store.batteries()
-	rows := []string{title, m.store.legend()}
+	rows := []string{title, m.store.legend(now)}
 
 	// Besides the charts there are the title and legend, a heading for each chart, two boiler rows
 	// and the battery heading and rows.

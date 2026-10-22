@@ -115,6 +115,21 @@ func TestStoreIgnoresUnrelatedReport(t *testing.T) {
 	assert.Empty(t, s.Series)
 }
 
+func TestLegendMarksStaleDevices(t *testing.T) {
+	s := NewStore(receiver)
+	now := time.Unix(100000, 0)
+
+	s.Apply(update(t, "hall", now.Add(-3*time.Hour), `{"temperature":18.2}`))
+	s.Apply(update(t, "office", now.Add(-5*time.Minute), `{"temperature":20.1}`))
+	s.Apply(update(t, "office", now.Add(-4*time.Hour), `{"battery":90}`))
+
+	legend := s.legend(now)
+
+	assert.Contains(t, legend, "hall 18.2°C (3h ago)")
+	assert.Contains(t, legend, "office 20.1°C")
+	assert.NotContains(t, legend, "office 20.1°C (")
+}
+
 func TestStrip(t *testing.T) {
 	from := time.Unix(0, 0)
 	s := Series{
