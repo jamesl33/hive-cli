@@ -24,6 +24,9 @@ const (
 
 	// staleColor is the colour of a stale device in the legend.
 	staleColor = lipgloss.Color("240")
+
+	// targetColor is the colour of the target line on the temperature chart.
+	targetColor = lipgloss.Color("231")
 )
 
 // palette is the colours of the devices, in the order of their names.
@@ -106,18 +109,16 @@ func batteryBar(percent float64) string {
 	return lipgloss.NewStyle().Foreground(BatteryColor(percent)).Render(bar)
 }
 
-// valueRange returns the range of a metric across all devices since from, padded so lines do not
+// valueRange returns the range of the metrics across all devices since from, padded so lines do not
 // touch the edges.
-func valueRange(byDevice map[string]Series, from time.Time) (float64, float64) {
+func valueRange(from time.Time, byDevice ...map[string]Series) (float64, float64) {
 	lo, hi := math.Inf(1), math.Inf(-1)
 
-	for _, series := range byDevice {
-		for _, p := range series {
-			if p.At.Before(from) {
-				continue
+	for _, m := range byDevice {
+		for _, series := range m {
+			for _, p := range visible(series, from) {
+				lo, hi = math.Min(lo, p.Value), math.Max(hi, p.Value)
 			}
-
-			lo, hi = math.Min(lo, p.Value), math.Max(hi, p.Value)
 		}
 	}
 
@@ -140,7 +141,12 @@ type chart struct {
 // renderChart draws a line for each device which has samples of the metric.
 func (s *Store) renderChart(metric Metric, w, h int, from, to time.Time) chart {
 	byDevice := s.Series[metric]
-	lo, hi := valueRange(byDevice, from)
+	targets := map[string]Series{}
+	if metric == Temperature {
+		targets = s.Series[Target]
+	}
+
+	lo, hi := valueRange(from, byDevice, targets)
 
 	c := timeserieslinechart.New(w, h,
 		timeserieslinechart.WithTimeRange(from, to),
@@ -159,6 +165,15 @@ func (s *Store) renderChart(metric Metric, w, h int, from, to time.Time) chart {
 		if len(points) > 0 {
 			c.SetDataSetStyle(device, lipgloss.NewStyle().Foreground(color(i)))
 		}
+	}
+
+	for device, series := range targets {
+		name := device + " target"
+		for _, p := range spanned(visible(series, from), to) {
+			c.PushDataSet(name, timeserieslinechart.TimePoint{Time: p.At, Value: p.Value})
+		}
+
+		c.SetDataSetStyle(name, lipgloss.NewStyle().Foreground(targetColor))
 	}
 
 	c.DrawBrailleAll()
@@ -217,18 +232,35 @@ func (s *Store) legend(now time.Time) string {
 			text += fmt.Sprintf(" %.1f°C", p.Value)
 		}
 
+		style := lipgloss.NewStyle().Foreground(color(i))
+		stale := now.Sub(s.lastSeen(device)) >= staleAfter
+
+		if stale {
+			style = lipgloss.NewStyle().Foreground(staleColor)
+		}
+
+		part := style.Render("● " + text)
+
+		if p, ok := s.Series[Target][device].Last(); ok {
+			targetStyle := lipgloss.NewStyle().Foreground(targetColor)
+			if stale {
+				targetStyle = style
+			}
+
+			part += targetStyle.Render(fmt.Sprintf(" (target %.1f°C)", p.Value))
+		}
+
+		text = ""
+
 		if p, ok := s.Series[Humidity][device].Last(); ok {
 			text += fmt.Sprintf(" %.0f%%", p.Value)
 		}
 
-		style := lipgloss.NewStyle().Foreground(color(i))
-
-		if age := now.Sub(s.lastSeen(device)); age >= staleAfter {
-			text += fmt.Sprintf(" (%s ago)", formatWindow(age))
-			style = lipgloss.NewStyle().Foreground(staleColor)
+		if stale {
+			text += fmt.Sprintf(" (%s ago)", formatWindow(now.Sub(s.lastSeen(device))))
 		}
 
-		parts = append(parts, style.Render("● "+text))
+		parts = append(parts, part+style.Render(text))
 	}
 
 	return strings.Join(parts, "  ")

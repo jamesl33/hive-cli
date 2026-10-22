@@ -17,6 +17,7 @@ const (
 	Humidity    Metric = "humidity"
 	Battery     Metric = "battery"
 	Boiler      Metric = "boiler"
+	Target      Metric = "target"
 )
 
 // Values of the Boiler metric.
@@ -213,7 +214,7 @@ func readings(u z2m.Update, metrics ...Metric) []Sample {
 	return samples
 }
 
-// receiverSamples returns the room temperature and boiler state if the report changes them.
+// receiverSamples returns the room temperature, target and boiler state if the report changes them.
 func receiverSamples(r hive.Receiver, u z2m.Update, state map[string]any) []Sample {
 	var samples []Sample
 
@@ -221,6 +222,10 @@ func receiverSamples(r hive.Receiver, u z2m.Update, state map[string]any) []Samp
 
 	if _, ok := u.Payload[r.Key("local_temperature")]; ok && s.Temperature != nil {
 		samples = append(samples, Sample{Device: u.Device, Metric: Temperature, At: u.At, Value: *s.Temperature})
+	}
+
+	if _, ok := u.Payload[r.Key("occupied_heating_setpoint")]; ok && s.Target != nil {
+		samples = append(samples, Sample{Device: u.Device, Metric: Target, At: u.At, Value: *s.Target})
 	}
 
 	_, mode := u.Payload[r.Key("system_mode")]

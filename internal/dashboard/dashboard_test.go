@@ -233,3 +233,13 @@ func TestViewWideWindow(t *testing.T) {
 	next, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	t.Log("\n" + next.View())
 }
+
+func TestStoreRecordsTarget(t *testing.T) {
+	s := NewStore(receiver)
+	s.Apply(update(t, "hive", time.Unix(1, 0), `{"system_mode":"heat","occupied_heating_setpoint":20.5}`))
+
+	target, ok := s.Series[Target]["hive"].Last()
+	require.True(t, ok)
+	assert.Equal(t, 20.5, target.Value)
+	assert.Contains(t, s.legend(time.Unix(2, 0)), "target 20.5°C")
+}
