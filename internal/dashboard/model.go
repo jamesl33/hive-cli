@@ -148,6 +148,10 @@ func (m Model) View() string {
 		title += lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Render("  reconnecting to broker...")
 	}
 
+	if len(m.store.Order) == 0 {
+		return title + "\n\nWaiting for devices to report; sensors only send when their reading changes."
+	}
+
 	batteries := m.store.batteries()
 	rows := []string{title, m.store.legend()}
 

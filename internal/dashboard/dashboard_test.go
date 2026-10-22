@@ -154,6 +154,13 @@ func TestViewShowsEverything(t *testing.T) {
 	}
 }
 
+func TestViewWaitsForData(t *testing.T) {
+	m := New(t.Context(), feed{}, NewStore(receiver))
+	next, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+
+	assert.Contains(t, next.View(), "Waiting for devices")
+}
+
 func TestSpanned(t *testing.T) {
 	to := time.Unix(100, 0)
 	s := Series{{At: time.Unix(20, 0), Value: 1}, {At: time.Unix(60, 0), Value: 2}}
