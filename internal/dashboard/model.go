@@ -79,6 +79,11 @@ func (m Model) Err() error {
 	return m.err
 }
 
+// WindowStart returns the start of the window shown at the time.
+func (m Model) WindowStart(now time.Time) time.Time {
+	return now.Add(-windows[m.window])
+}
+
 // Init starts reading reports and redrawing.
 func (m Model) Init() tea.Cmd {
 	return tea.Batch(m.wait(), tick())
@@ -110,10 +115,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "q", "ctrl+c", "esc":
 			return m, tea.Quit
-		case "w":
-			m.window = (m.window + 1) % len(windows)
-		case "W":
-			m.window = (m.window + len(windows) - 1) % len(windows)
+		case "w", "W":
+			step := 1
+			if msg.String() == "W" {
+				step = len(windows) - 1
+			}
+
+			m.window = (m.window + step) % len(windows)
+
+			err := m.store.Reload(m.WindowStart(time.Now()))
+			if err != nil {
+				m.err = fmt.Errorf("failed to load history: %w", err)
+
+				return m, tea.Quit
+			}
 		}
 	case updateMsg:
 		m.store.Apply(z2m.Update(msg))

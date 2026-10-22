@@ -167,23 +167,34 @@ func TestLoadMissingDirectory(t *testing.T) {
 	assert.Empty(t, got)
 }
 
-func TestStoreRestoreLoadsAllHistory(t *testing.T) {
+func TestStoreRestoreAndReloadByWindow(t *testing.T) {
 	l, dir := openLog(t)
 
+	late := day1.Add(10 * 24 * time.Hour)
+
 	l.Add(sample("office", Temperature, day1, 19))
-	l.Add(sample("office", Temperature, day1.Add(10*24*time.Hour), 21))
-	require.NoError(t, l.Flush(day1.Add(10*24*time.Hour)))
+	l.Add(sample("office", Temperature, late, 21))
+	require.NoError(t, l.Flush(late))
 
 	s := NewStore(receiver)
-	require.NoError(t, s.Restore(dir))
+	require.NoError(t, s.Restore(dir, late))
 
-	// The first day, the checkpoint which starts the last day, and the change
+	// Only the last day: the checkpoint which starts it, and the change
 	series := s.Series[Temperature]["office"]
-	require.Len(t, series, 3)
+	require.Len(t, series, 2)
 	assert.Equal(t, 19.0, series[0].Value)
-	assert.Equal(t, 19.0, series[1].Value)
-	assert.Equal(t, 21.0, series[2].Value)
+	assert.Equal(t, 21.0, series[1].Value)
 	assert.Equal(t, []string{"office"}, s.Order)
+
+	// A wider window loads the first day too
+	require.NoError(t, s.Reload(day1))
+	assert.Len(t, s.Series[Temperature]["office"], 3)
+
+	// A sample which is not written yet survives a reload
+	s.add(sample("office", Temperature, late.Add(time.Hour), 22))
+	require.NoError(t, s.Reload(late))
+	assert.Len(t, s.Series[Temperature]["office"], 3)
+	assert.Equal(t, 22.0, s.Series[Temperature]["office"][2].Value)
 }
 
 func TestVisible(t *testing.T) {

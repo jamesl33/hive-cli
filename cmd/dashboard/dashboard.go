@@ -3,6 +3,7 @@ package dashboard
 import (
 	"context"
 	"fmt"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/jamesl33/hive-cli/internal/dashboard"
@@ -48,12 +49,12 @@ func (d *Dashboard) Run(ctx context.Context) error {
 
 	store := dashboard.NewStore(feed.Receiver)
 
-	err = store.Restore(d.dir)
+	model := dashboard.New(ctx, feed, store)
+
+	err = store.Restore(d.dir, model.WindowStart(time.Now()))
 	if err != nil {
 		return fmt.Errorf("failed to load history: %w", err)
 	}
-
-	model := dashboard.New(ctx, feed, store)
 
 	final, err := tea.NewProgram(model, tea.WithAltScreen(), tea.WithContext(ctx)).Run()
 	if err != nil {

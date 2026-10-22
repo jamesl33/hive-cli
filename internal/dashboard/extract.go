@@ -52,6 +52,9 @@ type Store struct {
 	// Series is the samples of each device, by metric.
 	Series map[Metric]map[string]Series
 
+	// dir is where the history is loaded from, if any.
+	dir string
+
 	// reports works out the measurements in each device report.
 	reports *Reports
 }
@@ -74,18 +77,69 @@ func (s *Store) Apply(u z2m.Update) {
 	}
 }
 
-// Restore adds all of the history recorded in the directory.
-func (s *Store) Restore(dir string) error {
-	samples, err := Load(dir, time.Time{})
+// Restore replaces the series with the history recorded in the directory from the start of the day
+// of from, and remembers the directory for Reload. Samples which are newer than the history, as they
+// are not written yet, are kept.
+func (s *Store) Restore(dir string, from time.Time) error {
+	samples, err := Load(dir, from)
 	if err != nil {
 		return err
 	}
 
-	for _, sample := range samples {
+	var newest time.Time
+	if len(samples) > 0 {
+		newest = samples[len(samples)-1].At
+	}
+
+	live := s.after(newest)
+
+	s.dir = dir
+	s.Series = make(map[Metric]map[string]Series)
+
+	for _, sample := range append(samples, live...) {
 		s.add(sample)
 	}
 
 	return nil
+}
+
+// after returns the samples which are newer than the time, oldest first.
+func (s *Store) after(t time.Time) []Sample {
+	var samples []Sample
+
+	for metric, byDevice := range s.Series {
+		for device, series := range byDevice {
+			samples = append(samples, seriesAfter(series, t, device, metric)...)
+		}
+	}
+
+	slices.SortStableFunc(samples, func(a, b Sample) int { return a.At.Compare(b.At) })
+
+	return samples
+}
+
+// seriesAfter returns the points of a series which are newer than the time, as samples.
+func seriesAfter(series Series, t time.Time, device string, metric Metric) []Sample {
+	var samples []Sample
+
+	for _, p := range series {
+		if !p.At.After(t) {
+			continue
+		}
+
+		samples = append(samples, Sample{Device: device, Metric: metric, At: p.At, Value: p.Value})
+	}
+
+	return samples
+}
+
+// Reload loads the history from the start of the day of from, if Restore has been given a directory.
+func (s *Store) Reload(from time.Time) error {
+	if s.dir == "" {
+		return nil
+	}
+
+	return s.Restore(s.dir, from)
 }
 
 // add appends a sample to its series.
