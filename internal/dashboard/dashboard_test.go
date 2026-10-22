@@ -174,6 +174,14 @@ func TestWindowCycles(t *testing.T) {
 	}
 
 	assert.Equal(t, start, m.window)
+
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'W'}})
+	assert.Equal(t, start-1, next.(Model).window)
+
+	m.window = 0
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'W'}})
+	assert.Equal(t, len(windows)-1, next.(Model).window)
+
 	assert.Equal(t, "15m", formatWindow(15*time.Minute))
 	assert.Equal(t, "3h", formatWindow(3*time.Hour))
 }

@@ -23,7 +23,7 @@ const (
 	minHeight = 18
 )
 
-// windows are the time spans the charts can show, cycled with the w key.
+// windows are the time spans the charts can show, cycled with the w and W keys.
 var windows = []time.Duration{
 	time.Minute,
 	15 * time.Minute,
@@ -112,6 +112,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		case "w":
 			m.window = (m.window + 1) % len(windows)
+		case "W":
+			m.window = (m.window + len(windows) - 1) % len(windows)
 		}
 	case updateMsg:
 		m.store.Apply(z2m.Update(msg))
@@ -140,7 +142,7 @@ func (m Model) View() string {
 	from := now.Add(-windows[m.window])
 
 	title := lipgloss.NewStyle().Bold(true).Render("Dashboard")
-	title += fmt.Sprintf("  last %s  (w: change window, q: quit)", formatWindow(windows[m.window]))
+	title += fmt.Sprintf("  last %s  (w/W: change window, q: quit)", formatWindow(windows[m.window]))
 
 	if !m.connected {
 		title += lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Render("  reconnecting to broker...")
