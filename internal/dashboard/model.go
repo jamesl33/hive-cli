@@ -13,10 +13,12 @@ import (
 )
 
 const (
-	// minRefresh and maxRefresh bound how often the dashboard checks for a redraw when nothing has been
-	// reported. The chart only moves once per cell, so shorter windows need it more often; the maximum
-	// keeps the connection status current.
+	// minRefresh is the shortest interval between redraw checks when nothing has been reported. The chart
+	// only moves once per cell, so shorter windows need checks this often.
 	minRefresh = time.Second
+
+	// maxRefresh is the longest interval between redraw checks when nothing has been reported. It keeps
+	// the connection status current.
 	maxRefresh = 10 * time.Second
 
 	// minWidth is the narrowest terminal the dashboard can draw in.

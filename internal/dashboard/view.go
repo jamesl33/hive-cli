@@ -192,6 +192,16 @@ func visible(s Series, from time.Time) Series {
 // downsample reduces the series to the lowest and highest point in each of the buckets which the span
 // from the time to the time is divided into, so a chart with that many columns of dots draws the same
 // lines from fewer points. The first and last points are kept, as they anchor the ends of the line.
+//
+// The algorithm is min/max bucketing:
+//  1. The span is divided into equal buckets of step = (to - from) / buckets.
+//  2. Each point falls in bucket (At - from) / step. The series is time ordered, so each bucket is a
+//     contiguous run, found in one pass.
+//  3. Per run, the points with the lowest and highest value are kept, in time order, so the line still
+//     rises and falls through the same extremes. A run with one point, or equal extremes, keeps one.
+//  4. A series of 2*buckets points or fewer is returned as is, as it cannot shrink.
+//
+// The output has at most 2*buckets+2 points, and nothing is averaged, so spikes are never smoothed away.
 func downsample(s Series, from, to time.Time, buckets int) Series {
 	step := to.Sub(from) / time.Duration(max(buckets, 1))
 	if step <= 0 || len(s) <= 2*buckets {
