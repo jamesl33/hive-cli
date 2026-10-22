@@ -37,7 +37,7 @@ var windows = []time.Duration{
 }
 
 // defaultWindow is the position in windows shown at start.
-const defaultWindow = 1
+const defaultWindow = 4
 
 // helpText lists the keys.
 const helpText = `w   next time window
