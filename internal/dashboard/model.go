@@ -13,8 +13,11 @@ import (
 )
 
 const (
-	// refresh is how often the dashboard redraws when nothing has been reported.
-	refresh = time.Second
+	// minRefresh and maxRefresh bound how often the dashboard checks for a redraw when nothing has been
+	// reported. The chart only moves once per cell, so shorter windows need it more often; the maximum
+	// keeps the connection status current.
+	minRefresh = time.Second
+	maxRefresh = 10 * time.Second
 
 	// minWidth is the narrowest terminal the dashboard can draw in.
 	minWidth = 50
@@ -112,7 +115,7 @@ func (m Model) WindowStart(now time.Time) time.Time {
 
 // Init starts reading reports and redrawing.
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(m.wait(), tick())
+	return tea.Batch(m.wait(), m.tick())
 }
 
 // wait returns a command which delivers the next report.
@@ -127,9 +130,9 @@ func (m Model) wait() tea.Cmd {
 	}
 }
 
-// tick returns a command which triggers a redraw after the refresh interval.
-func tick() tea.Cmd {
-	return tea.Tick(refresh, func(t time.Time) tea.Msg { return tickMsg(t) })
+// tick returns a command which triggers a redraw after the time it takes the chart to move by a cell.
+func (m Model) tick() tea.Cmd {
+	return tea.Tick(min(max(m.cell(), minRefresh), maxRefresh), func(t time.Time) tea.Msg { return tickMsg(t) })
 }
 
 // Update handles input and new reports.
@@ -171,7 +174,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.wait()
 	case tickMsg:
 		m.connected = m.source.Connected()
-		return m, tick()
+		return m, m.tick()
 	case errMsg:
 		if m.ctx.Err() == nil {
 			m.err = msg.err
