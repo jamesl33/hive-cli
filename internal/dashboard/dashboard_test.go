@@ -8,6 +8,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/jamesl33/hive-cli/internal/hive"
 	"github.com/jamesl33/hive-cli/internal/z2m"
 	"github.com/stretchr/testify/assert"
@@ -260,4 +261,12 @@ func TestStoreRecordsTarget(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, 20.5, target.Value)
 	assert.Contains(t, s.legend(time.Unix(2, 0)), "target 20.5°C")
+}
+
+func TestBoxClipsAndPads(t *testing.T) {
+	got := box("T", "short\n"+strings.Repeat("x", 30), 12)
+
+	for line := range strings.SplitSeq(got, "\n") {
+		assert.Equal(t, 12, lipgloss.Width(line), line)
+	}
 }

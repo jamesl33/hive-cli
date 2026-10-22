@@ -273,7 +273,7 @@ func (m Model) draw(now time.Time) string {
 		rows = append(rows, box("Battery", strings.Join(batteries, "\n"), m.width))
 	}
 
-	return lipgloss.NewStyle().MaxWidth(m.width).Render(strings.Join(rows, "\n"))
+	return strings.Join(rows, "\n")
 }
 
 // box draws the body inside a border of the width, with the title set into the top edge.
@@ -286,8 +286,13 @@ func box(title, body string, width int) string {
 	clip := lipgloss.NewStyle().MaxWidth(inner)
 
 	for line := range strings.SplitSeq(body, "\n") {
-		line = clip.Render(line)
-		lines = append(lines, "│"+line+strings.Repeat(" ", max(inner-lipgloss.Width(line), 0))+"│")
+		w := lipgloss.Width(line)
+		if w > inner {
+			line = clip.Render(line)
+			w = lipgloss.Width(line)
+		}
+
+		lines = append(lines, "│"+line+strings.Repeat(" ", max(inner-w, 0))+"│")
 	}
 
 	lines = append(lines, "└"+strings.Repeat("─", inner)+"┘")
