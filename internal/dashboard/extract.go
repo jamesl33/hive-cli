@@ -52,8 +52,8 @@ type Store struct {
 	// Series is the samples of each device, by metric.
 	Series map[Metric]map[string]Series
 
-	// state is the attributes each device has reported so far.
-	state map[string]map[string]any
+	// reports works out the measurements in each device report.
+	reports *Reports
 }
 
 // NewStore returns an empty store.
@@ -61,7 +61,7 @@ func NewStore(r hive.Receiver) *Store {
 	s := &Store{
 		Receiver: r,
 		Series:   make(map[Metric]map[string]Series),
-		state:    make(map[string]map[string]any),
+		reports:  NewReports(r),
 	}
 
 	return s
@@ -69,17 +69,23 @@ func NewStore(r hive.Receiver) *Store {
 
 // Apply records the measurements in a device report.
 func (s *Store) Apply(u z2m.Update) {
-	if s.state[u.Device] == nil {
-		s.state[u.Device] = make(map[string]any)
-	}
-
-	for k, v := range u.Payload {
-		s.state[u.Device][k] = v
-	}
-
-	for _, sample := range Extract(s.Receiver, u, s.state[u.Device]) {
+	for _, sample := range s.reports.Samples(u) {
 		s.add(sample)
 	}
+}
+
+// Restore adds all of the history recorded in the directory.
+func (s *Store) Restore(dir string) error {
+	samples, err := Load(dir, time.Time{})
+	if err != nil {
+		return err
+	}
+
+	for _, sample := range samples {
+		s.add(sample)
+	}
+
+	return nil
 }
 
 // add appends a sample to its series.
@@ -95,6 +101,34 @@ func (s *Store) add(sample Sample) {
 	if !found {
 		s.Order = slices.Insert(s.Order, i, sample.Device)
 	}
+}
+
+// Reports works out the measurements in device reports.
+type Reports struct {
+	receiver hive.Receiver
+
+	// state is the attributes each device has reported so far.
+	state map[string]map[string]any
+}
+
+// NewReports returns a Reports which has seen no reports.
+func NewReports(r hive.Receiver) *Reports {
+	rp := &Reports{receiver: r, state: make(map[string]map[string]any)}
+
+	return rp
+}
+
+// Samples returns the measurements in a report.
+func (r *Reports) Samples(u z2m.Update) []Sample {
+	if r.state[u.Device] == nil {
+		r.state[u.Device] = make(map[string]any)
+	}
+
+	for k, v := range u.Payload {
+		r.state[u.Device][k] = v
+	}
+
+	return Extract(r.receiver, u, r.state[u.Device])
 }
 
 // Extract returns the measurements in a report. The state is every attribute the device has

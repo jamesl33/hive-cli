@@ -9,6 +9,7 @@ import (
 	"github.com/jamesl33/hive-cli/cmd/dashboard"
 	"github.com/jamesl33/hive-cli/cmd/manual"
 	"github.com/jamesl33/hive-cli/cmd/off"
+	"github.com/jamesl33/hive-cli/cmd/record"
 	"github.com/jamesl33/hive-cli/cmd/schedule"
 	"github.com/jamesl33/hive-cli/cmd/status"
 	"github.com/jamesl33/hive-cli/internal/z2m"
@@ -65,6 +66,7 @@ func init() {
 		dashboard.NewDashboard(&options),
 		manual.NewManual(&options),
 		off.NewOff(&options),
+		record.NewRecord(&options),
 		schedule.NewSchedule(&options),
 		status.NewStatus(&options),
 	)

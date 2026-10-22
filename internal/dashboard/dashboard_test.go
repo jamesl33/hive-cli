@@ -34,8 +34,10 @@ func TestSeriesAppendDropsOld(t *testing.T) {
 	s = s.Append(Point{At: start.Add(time.Hour), Value: 2})
 	s = s.Append(Point{At: start.Add(maxAge + 2*time.Hour), Value: 3})
 
-	require.Len(t, s, 1)
-	assert.Equal(t, 3.0, s[0].Value)
+	// The newest point which is too old is kept, as it is the value held from the start of the period
+	require.Len(t, s, 2)
+	assert.Equal(t, 2.0, s[0].Value)
+	assert.Equal(t, 3.0, s[1].Value)
 }
 
 func TestSeriesAppendCaps(t *testing.T) {

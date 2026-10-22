@@ -23,8 +23,10 @@ hive off            off; frost protection still applies
 hive schedule       follow the thermostat schedule (also ends a boost)
 hive boost 1h [22]  boost (default 18°C); 30, 45m, 1h30m...; max 6h
 hive dashboard      live TUI: temperature and humidity of every sensor, boiler on/idle/off, batteries
+hive record         record the dashboard's history to disk until stopped (30 days)
 ```
 
+- `record` and `dashboard` share `--history` (`HIVE_HISTORY`, default `~/.local/state/hive`). The dashboard loads everything `record` wrote, then goes live.
 - Flags: `--broker` (`HIVE_BROKER`, default `tcp://localhost:1883`, `mqtts://` for TLS), `--username` (`HIVE_USERNAME`), `--password` (`HIVE_PASSWORD`).
 - Exactly one receiver must be paired with Zigbee2MQTT (base topic `zigbee2mqtt`).
 - Exit status is 0 once the receiver confirms the change, 130 if interrupted, 1 on any other error.
@@ -43,7 +45,7 @@ make install
 
 ## Scheduling
 
-To run a heating schedule on the Pi, see [deploy/systemd](deploy/systemd).
+To run a heating schedule and the history recorder on the Pi, see [deploy/systemd](deploy/systemd).
 
 ## Notes
 

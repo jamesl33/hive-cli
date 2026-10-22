@@ -24,11 +24,17 @@ install -d -m 755 /etc/hive
 install -m 644 hive-schedule.service /etc/systemd/system/hive-schedule.service
 install -m 644 hive-schedule.timer /etc/systemd/system/hive-schedule.timer
 
+# The history is readable by everyone, so any user can run 'hive dashboard --history /var/lib/hive'
+id hive >/dev/null 2>&1 || useradd --system --no-create-home --shell /usr/sbin/nologin hive
+install -d -m 755 -o hive -g hive /var/lib/hive
+install -m 644 hive-record.service /etc/systemd/system/hive-record.service
+
 # Make time-sync.target wait for a real NTP sync rather than being reached immediately
 systemctl enable --now systemd-time-wait-sync.service 2>/dev/null || true
 
 systemctl daemon-reload
 systemctl enable --now hive-schedule.timer
+systemctl enable --now hive-record.service
 
 # Apply the current slot straight away
 systemctl start hive-schedule.service

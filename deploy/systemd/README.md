@@ -28,6 +28,17 @@ Runs a heating schedule on the Pi: `hive-schedule.timer` fires every 15 minutes,
 
 `install.sh` won't overwrite an existing `/etc/hive/schedule` or `/etc/hive/env`.
 
+## History
+
+`hive-record.service` runs `hive record`, writing to `/var/lib/hive` for `hive dashboard --history /var/lib/hive`. It is built to go easy on the SD card:
+
+- Changes only: a reading that rounds to the last one recorded (0.1°C, 1% humidity and battery) is dropped.
+- Held in memory and appended to disk every 10 minutes. A power cut loses at most that.
+- One file per UTC day, starting with the value of every series, so reading a day never needs another. Files older than 30 days are deleted; nothing is ever rewritten.
+- Each change is one ~40 byte line. The dashboard reads all of it at start.
+
+Check on it with `journalctl -u hive-record` and `ls -l /var/lib/hive`.
+
 ## Day to day
 
 ```sh

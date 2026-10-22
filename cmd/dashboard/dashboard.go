@@ -13,6 +13,7 @@ import (
 // Dashboard defines the struct for the dashboard command.
 type Dashboard struct {
 	options *z2m.Options
+	dir     string
 }
 
 // NewDashboard creates a new command for displaying a live dashboard of the heating and sensors.
@@ -26,6 +27,13 @@ func NewDashboard(options *z2m.Options) *cobra.Command {
 		RunE:  func(cmd *cobra.Command, _ []string) error { return d.Run(cmd.Context()) },
 	}
 
+	cmd.Flags().StringVar(
+		&d.dir,
+		"history",
+		z2m.Env("HIVE_HISTORY", dashboard.DefaultDir()),
+		"directory with the history written by 'hive record' (HIVE_HISTORY)",
+	)
+
 	return &cmd
 }
 
@@ -38,7 +46,14 @@ func (d *Dashboard) Run(ctx context.Context) error {
 
 	defer feed.Close()
 
-	model := dashboard.New(ctx, feed, dashboard.NewStore(feed.Receiver))
+	store := dashboard.NewStore(feed.Receiver)
+
+	err = store.Restore(d.dir)
+	if err != nil {
+		return fmt.Errorf("failed to load history: %w", err)
+	}
+
+	model := dashboard.New(ctx, feed, store)
 
 	final, err := tea.NewProgram(model, tea.WithAltScreen(), tea.WithContext(ctx)).Run()
 	if err != nil {

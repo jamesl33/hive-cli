@@ -1,0 +1,34 @@
+[Unit]
+Description=Record Hive sensor and heating history
+Documentation=https://github.com/jamesl33/hive-cli/tree/master/deploy/systemd
+# Samples are stamped with the wall-clock time, which is wrong until NTP syncs (the Pi Zero has no RTC)
+Wants=network-online.target time-sync.target
+After=network-online.target time-sync.target mosquitto.service zigbee2mqtt.service
+
+[Service]
+EnvironmentFile=-/etc/hive/env
+Environment=HIVE_HISTORY=/var/lib/hive
+ExecStart=/usr/local/bin/hive record
+Restart=always
+RestartSec=30s
+User=hive
+# Hardening: it only needs to write its history and talk to the broker
+ProtectSystem=strict
+ReadWritePaths=/var/lib/hive
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+NoNewPrivileges=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+LockPersonality=yes
+CapabilityBoundingSet=
+# Keep it from competing with Zigbee2MQTT and Mosquitto on a single core
+Nice=10
+MemoryMax=64M
+
+[Install]
+WantedBy=multi-user.target

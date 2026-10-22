@@ -3,6 +3,7 @@ package dashboard
 import (
 	"fmt"
 	"math"
+	"sort"
 	"strings"
 	"time"
 
@@ -150,7 +151,7 @@ func (s *Store) renderChart(metric Metric, w, h int, from, to time.Time) chart {
 	)
 
 	for i, device := range s.Order {
-		points := spanned(byDevice[device], to)
+		points := spanned(visible(byDevice[device], from), to)
 		for _, p := range points {
 			c.PushDataSet(device, timeserieslinechart.TimePoint{Time: p.At, Value: p.Value})
 		}
@@ -163,6 +164,14 @@ func (s *Store) renderChart(metric Metric, w, h int, from, to time.Time) chart {
 	c.DrawBrailleAll()
 
 	return chart{view: c.View(), left: c.Origin().X + 1, width: c.GraphWidth()}
+}
+
+// visible returns the points which can be seen from the time on: those after it, and the one before
+// which holds into the window. Only these are drawn, however much history has been loaded.
+func visible(s Series, from time.Time) Series {
+	i := sort.Search(len(s), func(i int) bool { return s[i].At.After(from) })
+
+	return s[max(i-1, 0):]
 }
 
 // spanned extends a series up to the present, holding its last value, so the line is not cut short
