@@ -272,23 +272,95 @@ func TestBoxClipsAndPads(t *testing.T) {
 }
 
 func TestDownsample(t *testing.T) {
-	from := time.Unix(0, 0)
-	to := time.Unix(1000, 0)
+	from, to := time.Unix(0, 0), time.Unix(100, 0)
 
-	var s Series
-	for i := range 1000 {
-		s = append(s, Point{At: from.Add(time.Duration(i) * time.Second), Value: float64(i % 7)})
+	series := func(points ...[2]float64) Series {
+		var s Series
+		for _, p := range points {
+			s = append(s, Point{At: time.Unix(int64(p[0]), 0), Value: p[1]})
+		}
+
+		return s
 	}
 
-	s[500].Value = 50
+	tests := []struct {
+		name    string
+		in      Series
+		from    time.Time
+		to      time.Time
+		buckets int
+		want    Series
+	}{
+		{
+			name:    "empty",
+			buckets: 2,
+		},
+		{
+			name:    "fits in the buckets",
+			in:      series([2]float64{10, 1}, [2]float64{20, 2}, [2]float64{60, 3}, [2]float64{70, 4}),
+			buckets: 2,
+			want:    series([2]float64{10, 1}, [2]float64{20, 2}, [2]float64{60, 3}, [2]float64{70, 4}),
+		},
+		{
+			name:    "no span",
+			in:      series([2]float64{10, 1}, [2]float64{20, 2}, [2]float64{30, 3}, [2]float64{40, 4}, [2]float64{50, 5}),
+			from:    from,
+			to:      from,
+			buckets: 1,
+			want:    series([2]float64{10, 1}, [2]float64{20, 2}, [2]float64{30, 3}, [2]float64{40, 4}, [2]float64{50, 5}),
+		},
+		{
+			name: "keeps the extremes of each bucket in time order, and the ends",
+			in: series(
+				[2]float64{-10, 5}, // Held into the window
+				[2]float64{10, 3}, [2]float64{20, 9}, [2]float64{30, 1}, [2]float64{40, 4},
+				[2]float64{60, 7}, [2]float64{70, 2}, [2]float64{80, 8}, [2]float64{90, 6},
+			),
+			buckets: 2,
+			want: series(
+				[2]float64{-10, 5},
+				[2]float64{20, 9}, [2]float64{30, 1},
+				[2]float64{70, 2}, [2]float64{80, 8},
+				[2]float64{90, 6},
+			),
+		},
+		{
+			name: "does not repeat the last point when it is an extreme",
+			in: series(
+				[2]float64{10, 3}, [2]float64{20, 4}, [2]float64{30, 5},
+				[2]float64{60, 7}, [2]float64{70, 2}, [2]float64{90, 9},
+			),
+			buckets: 2,
+			want: series(
+				[2]float64{10, 3},
+				[2]float64{20, 4}, [2]float64{30, 5},
+				[2]float64{70, 2}, [2]float64{90, 9},
+			),
+		},
+		{
+			name: "equal values give one point per bucket, and the last is kept",
+			in: series(
+				[2]float64{10, 3}, [2]float64{20, 3}, [2]float64{30, 3},
+				[2]float64{60, 7}, [2]float64{70, 7},
+			),
+			buckets: 2,
+			want: series(
+				[2]float64{10, 3},
+				[2]float64{20, 3},
+				[2]float64{60, 7},
+				[2]float64{70, 7},
+			),
+		},
+	}
 
-	got := downsample(s, from, to, 10)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			start, end := tt.from, tt.to
+			if end.IsZero() {
+				start, end = from, to
+			}
 
-	assert.LessOrEqual(t, len(got), 2*10+2)
-	assert.Equal(t, s[0], got[0])
-	assert.Equal(t, s[len(s)-1], got[len(got)-1])
-	assert.Contains(t, got, s[500])
-
-	short := s[:5]
-	assert.Equal(t, short, downsample(short, from, to, 10))
+			assert.Equal(t, tt.want, downsample(tt.in, start, end, tt.buckets))
+		})
+	}
 }
