@@ -157,7 +157,7 @@ func (s *Store) renderChart(metric Metric, w, h int, from, to time.Time) chart {
 	)
 
 	for i, device := range s.Order {
-		points := spanned(visible(byDevice[device], from), to)
+		points := spanned(downsample(visible(byDevice[device], from), from, to, w*2), to)
 		for _, p := range points {
 			c.PushDataSet(device, timeserieslinechart.TimePoint{Time: p.At, Value: p.Value})
 		}
@@ -169,7 +169,7 @@ func (s *Store) renderChart(metric Metric, w, h int, from, to time.Time) chart {
 
 	for device, series := range targets {
 		name := device + " target"
-		for _, p := range spanned(visible(series, from), to) {
+		for _, p := range spanned(downsample(visible(series, from), from, to, w*2), to) {
 			c.PushDataSet(name, timeserieslinechart.TimePoint{Time: p.At, Value: p.Value})
 		}
 
@@ -187,6 +187,50 @@ func visible(s Series, from time.Time) Series {
 	i := sort.Search(len(s), func(i int) bool { return s[i].At.After(from) })
 
 	return s[max(i-1, 0):]
+}
+
+// downsample reduces the series to the lowest and highest point in each of the buckets which the span
+// from the time to the time is divided into, so a chart with that many columns of dots draws the same
+// lines from fewer points. The first and last points are kept, as they anchor the ends of the line.
+func downsample(s Series, from, to time.Time, buckets int) Series {
+	step := to.Sub(from) / time.Duration(max(buckets, 1))
+	if step <= 0 || len(s) <= 2*buckets {
+		return s
+	}
+
+	out := make(Series, 0, 2*buckets+2)
+	out = append(out, s[0])
+
+	for i := 1; i < len(s); {
+		bucket := s[i].At.Sub(from) / step
+		lo, hi := i, i
+		j := i
+
+		for ; j < len(s) && s[j].At.Sub(from)/step == bucket; j++ {
+			if s[j].Value < s[lo].Value {
+				lo = j
+			}
+
+			if s[j].Value > s[hi].Value {
+				hi = j
+			}
+		}
+
+		lo, hi = min(lo, hi), max(lo, hi)
+
+		out = append(out, s[lo])
+		if hi != lo {
+			out = append(out, s[hi])
+		}
+
+		i = j
+	}
+
+	if last := s[len(s)-1]; out[len(out)-1] != last {
+		out = append(out, last)
+	}
+
+	return out
 }
 
 // spanned extends a series up to the present, holding its last value, so the line is not cut short

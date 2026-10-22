@@ -270,3 +270,25 @@ func TestBoxClipsAndPads(t *testing.T) {
 		assert.Equal(t, 12, lipgloss.Width(line), line)
 	}
 }
+
+func TestDownsample(t *testing.T) {
+	from := time.Unix(0, 0)
+	to := time.Unix(1000, 0)
+
+	var s Series
+	for i := range 1000 {
+		s = append(s, Point{At: from.Add(time.Duration(i) * time.Second), Value: float64(i % 7)})
+	}
+
+	s[500].Value = 50
+
+	got := downsample(s, from, to, 10)
+
+	assert.LessOrEqual(t, len(got), 2*10+2)
+	assert.Equal(t, s[0], got[0])
+	assert.Equal(t, s[len(s)-1], got[len(got)-1])
+	assert.Contains(t, got, s[500])
+
+	short := s[:5]
+	assert.Equal(t, short, downsample(short, from, to, 10))
+}
