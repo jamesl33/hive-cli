@@ -161,6 +161,20 @@ func TestLoadSkipsEarlierDaysAndBadLines(t *testing.T) {
 	assert.Equal(t, sample("Temperature/Humidity (Office)", Temperature, time.Unix(1792569600, 0).UTC(), 19.5), got[0])
 }
 
+func TestLoadSkipsNULBytes(t *testing.T) {
+	dir := t.TempDir()
+	day := day1.Truncate(24 * time.Hour)
+	content := "1 temperature 150 office\n1 battery 90 office\x00\x00\x00\x002 temperature 160 office\n\x00\x00\x003 temperature 170 office\n"
+	require.NoError(t, os.WriteFile(dayPath(dir, day), []byte(content), 0o644))
+
+	got, err := Load(dir, day)
+	require.NoError(t, err)
+
+	require.Len(t, got, 4)
+	assert.Equal(t, 16.0, got[2].Value)
+	assert.Equal(t, 17.0, got[3].Value)
+}
+
 func TestLoadMissingDirectory(t *testing.T) {
 	got, err := Load(filepath.Join(t.TempDir(), "missing"), day1)
 	require.NoError(t, err)

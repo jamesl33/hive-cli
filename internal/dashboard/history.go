@@ -310,7 +310,8 @@ func listDays(dir string) ([]time.Time, error) {
 }
 
 // readDay returns the records in the file of a day. A line which can't be read, such as the last
-// one after a power cut, is skipped.
+// one after a power cut, is skipped. A power cut can also leave a run of NUL bytes, which may sit
+// before a good record without a newline, so they separate records as well.
 func readDay(dir string, day time.Time) ([]record, error) {
 	f, err := os.Open(dayPath(dir, day))
 	if err != nil {
@@ -324,9 +325,11 @@ func readDay(dir string, day time.Time) ([]record, error) {
 	scanner := bufio.NewScanner(f)
 
 	for scanner.Scan() {
-		r, ok := parseRecord(scanner.Text())
-		if ok {
-			records = append(records, r)
+		for _, part := range strings.Split(scanner.Text(), "\x00") {
+			r, ok := parseRecord(part)
+			if ok {
+				records = append(records, r)
+			}
 		}
 	}
 
