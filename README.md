@@ -24,7 +24,7 @@ hive schedule       follow the thermostat schedule (also ends a boost)
 hive boost 1h [22]  boost (default 18°C); 30, 45m, 1h30m...; max 6h
 hive dashboard      live TUI: temperature and humidity of every sensor, boiler on/idle/off, batteries
 hive record         record the dashboard's history to disk until stopped (30 days)
-hive summary [day]  mean/min/max per sensor, spread between rooms and boiler use for a day (default today)
+hive summary [first [last]]  mean/min/max per sensor, spread between rooms and boiler use for a day or range of days (default today)
 ```
 
 - `record`, `dashboard` and `summary` share `--history` (`HIVE_HISTORY`, default `~/.local/state/hive`). The dashboard loads everything `record` wrote, then goes live.

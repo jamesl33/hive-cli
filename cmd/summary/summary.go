@@ -39,14 +39,14 @@ type Summary struct {
 	outdoors string
 }
 
-// NewSummary creates a new command for summarising a day of recorded history.
+// NewSummary creates a new command for summarising recorded history.
 func NewSummary() *cobra.Command {
 	s := Summary{}
 
 	cmd := cobra.Command{
-		Short: "Summarise a day of recorded history: room temperatures, the spread between them and boiler use",
-		Use:   "summary [YYYY-MM-DD]",
-		Args:  cobra.MaximumNArgs(1),
+		Short: "Summarise a day or range of days of recorded history: room temperatures, the spread between them and boiler use",
+		Use:   "summary [FIRST-YYYY-MM-DD [LAST-YYYY-MM-DD]]",
+		Args:  cobra.MaximumNArgs(2),
 		RunE:  func(cmd *cobra.Command, args []string) error { return s.Run(cmd.OutOrStdout(), args) },
 	}
 
@@ -67,38 +67,48 @@ func NewSummary() *cobra.Command {
 	return &cmd
 }
 
-// Run prints the summary of the day, today unless given, in local time.
+// Run prints the summary from the first day to the last, both inclusive and today unless given, in local
+// time.
 func (s *Summary) Run(w io.Writer, args []string) error {
 	now := time.Now()
 	y, m, d := now.Date()
-	day := time.Date(y, m, d, 0, 0, 0, 0, now.Location())
+	first := time.Date(y, m, d, 0, 0, 0, 0, now.Location())
+	last := first
 
-	if len(args) == 1 {
-		var err error
-
-		day, err = time.ParseInLocation(dateLayout, args[0], now.Location())
+	for i, arg := range args {
+		day, err := time.ParseInLocation(dateLayout, arg, now.Location())
 		if err != nil {
-			return fmt.Errorf("invalid date %q, want YYYY-MM-DD: %w", args[0], err)
+			return fmt.Errorf("invalid date %q, want YYYY-MM-DD: %w", arg, err)
+		}
+
+		if i == 0 {
+			first, last = day, day
+		} else {
+			last = day
 		}
 	}
 
-	end := day.AddDate(0, 0, 1)
+	if last.Before(first) {
+		return fmt.Errorf("last day %s is before first day %s", last.Format(dateLayout), first.Format(dateLayout))
+	}
+
+	end := last.AddDate(0, 0, 1)
 	if end.After(now) {
 		end = now
 	}
 
-	samples, err := dashboard.Load(s.dir, day)
+	samples, err := dashboard.Load(s.dir, first)
 	if err != nil {
 		return fmt.Errorf("failed to load history: %w", err)
 	}
 
-	if len(samples) == 0 || !end.After(day) {
-		return fmt.Errorf("no history for %s in %s", day.Format(dateLayout), s.dir)
+	if len(samples) == 0 || !end.After(first) {
+		return fmt.Errorf("no history for %s in %s", first.Format(dateLayout), s.dir)
 	}
 
-	sum := dashboard.Summarize(samples, s.outdoors, day, end)
+	sum := dashboard.Summarize(samples, s.outdoors, first, end)
 
-	write(w, sum, s.outdoors, day, end)
+	write(w, sum, s.outdoors, first, end)
 
 	return nil
 }
@@ -149,14 +159,26 @@ func rowStyles(sum dashboard.Summary, outdoors string) map[string]lipgloss.Style
 	return styles
 }
 
-// writeHeader writes the day, the time it covers and the column names.
+// writeHeader writes the days, the time they cover if not whole and the column names.
 func writeHeader(w io.Writer, name lipgloss.Style, from, to time.Time) {
-	day := bold.Render(from.Format(dateLayout))
-	period := dim.Render(from.Format("15:04") + "–" + to.Format("15:04"))
+	days := from.Format(dateLayout)
+
+	// to is exclusive, so the last day is the one which holds the instant before it.
+	last := to.Add(-time.Nanosecond).Format(dateLayout)
+	if last != days {
+		days += " – " + last
+	}
+
 	columns := dim.Inherit(cell)
 
-	fmt.Fprintf(w, "%s  %s\n\n", day, period)
-	fmt.Fprintf(w, "%s%s%s%s\n", name.Render(""), columns.Render("mean"), columns.Render("min"), columns.Render("max"))
+	fmt.Fprint(w, bold.Render(days))
+
+	// The time only says something when the period ends part way through a day.
+	if to.Format("15:04:05") != "00:00:00" {
+		fmt.Fprint(w, "  ", dim.Render(from.Format("15:04")+"–"+to.Format("15:04")))
+	}
+
+	fmt.Fprintf(w, "\n\n%s%s%s%s\n", name.Render(""), columns.Render("mean"), columns.Render("min"), columns.Render("max"))
 }
 
 // writeRow writes the mean, min and max of a device in the style. Each cell is styled on its own, as the
