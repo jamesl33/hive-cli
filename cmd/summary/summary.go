@@ -14,10 +14,12 @@ import (
 // dateLayout is how a day is written on the command line.
 const dateLayout = "2006-01-02"
 
+// outdoors is the friendly name of the outdoor sensor, which is left out of the spread.
+const outdoors = "outdoors"
+
 // Summary defines the struct for the summary command.
 type Summary struct {
-	dir      string
-	outdoors string
+	dir string
 }
 
 // NewSummary creates a new command for summarising a day of recorded history.
@@ -37,8 +39,6 @@ func NewSummary() *cobra.Command {
 		z2m.Env("HIVE_HISTORY", dashboard.DefaultDir()),
 		"directory history is recorded in (HIVE_HISTORY)",
 	)
-
-	cmd.Flags().StringVar(&s.outdoors, "outdoors", "outdoors", "friendly name of the outdoor sensor, left out of the spread")
 
 	return &cmd
 }
@@ -72,7 +72,7 @@ func (s *Summary) Run(w io.Writer, args []string) error {
 		return fmt.Errorf("no history for %s in %s", day.Format(dateLayout), s.dir)
 	}
 
-	sum := dashboard.Summarize(samples, s.outdoors, day, end)
+	sum := dashboard.Summarize(samples, outdoors, day, end)
 
 	return write(w, sum, day, end)
 }
