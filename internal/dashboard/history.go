@@ -241,18 +241,16 @@ func (l *Log) write() error {
 		return fmt.Errorf("failed to open history: %w", err)
 	}
 
+	defer f.Close() // Closing again after the checked close below is harmless
+
 	_, err = f.Write(l.pending)
 	if err != nil {
-		f.Close()
-
 		return fmt.Errorf("failed to write history: %w", err)
 	}
 
 	// Without it a power cut can leave the file longer but filled with zeros
 	err = f.Sync()
 	if err != nil {
-		f.Close()
-
 		return fmt.Errorf("failed to sync history: %w", err)
 	}
 

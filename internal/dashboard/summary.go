@@ -197,19 +197,24 @@ func (t *tally) summary() Summary {
 		s.SpreadMean = t.spreadSum / t.spreadSpan
 	}
 
-	for device, d := range t.stats {
-		d.Mean = d.sum / d.span
-
-		if device == t.outdoors {
-			s.Outdoors = d
-
-			continue
-		}
-
-		s.Rooms = append(s.Rooms, *d)
+	for _, d := range t.stats {
+		t.place(&s, d)
 	}
 
 	slices.SortFunc(s.Rooms, func(a, b DeviceSummary) int { return cmp.Compare(a.Device, b.Device) })
 
 	return s
+}
+
+// place works out the mean of a device and puts it in the summary, as the outdoor device or a room.
+func (t *tally) place(s *Summary, d *DeviceSummary) {
+	d.Mean = d.sum / d.span
+
+	if d.Device == t.outdoors {
+		s.Outdoors = d
+
+		return
+	}
+
+	s.Rooms = append(s.Rooms, *d)
 }

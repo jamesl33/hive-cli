@@ -57,7 +57,12 @@ func NewSummary() *cobra.Command {
 		"directory history is recorded in (HIVE_HISTORY)",
 	)
 
-	cmd.Flags().StringVar(&s.outdoors, "outdoors", "outdoors", "friendly name of the outdoor sensor, left out of the spread")
+	cmd.Flags().StringVar(
+		&s.outdoors,
+		"outdoors",
+		"outdoors",
+		"friendly name of the outdoor sensor, left out of the spread",
+	)
 
 	return &cmd
 }
