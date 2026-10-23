@@ -14,6 +14,8 @@ flowchart LR
 
 The SLT3c is only a remote control. `hive` controls the receiver. Heating only: the SLR2c hot water channel is not supported.
 
+![hive dashboard](docs/dashboard.png)
+
 ## Commands
 
 ```
@@ -31,6 +33,22 @@ hive summary [first [last]]  mean/min/max per sensor, spread between rooms and b
 - Flags: `--broker` (`HIVE_BROKER`, default `tcp://localhost:1883`, `mqtts://` for TLS), `--username` (`HIVE_USERNAME`), `--password` (`HIVE_PASSWORD`).
 - Exactly one receiver must be paired with Zigbee2MQTT (base topic `zigbee2mqtt`).
 - Exit status is 0 once the receiver confirms the change, 130 if interrupted, 1 on any other error.
+
+Example `hive summary` output:
+
+```
+2026-10-23  until 20:43
+
+            mean   min   max
+bedroom     15.9  14.8  17.2
+hive        15.6  14.0  17.5
+lounge      15.0  13.2  16.6
+office      16.9  15.1  18.9
+outdoors     8.2   7.3   9.3
+
+spread 2.4°C mean · 3.9°C max
+boiler 3h16m on · 6 runs
+```
 
 ## Install
 
