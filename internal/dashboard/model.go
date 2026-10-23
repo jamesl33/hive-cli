@@ -3,6 +3,8 @@ package dashboard
 import (
 	"context"
 	"fmt"
+	"maps"
+	"slices"
 	"strings"
 	"time"
 
@@ -45,10 +47,13 @@ var windows = []time.Duration{
 const defaultWindow = 4
 
 // helpText lists the keys.
-const helpText = `w   next time window
-W   previous time window
-?   toggle this help
-q   quit`
+const helpText = `w      next time window
+W      previous time window
+1-8    show or hide a device on the charts
+o      show or hide the outdoor sensor on the charts
+space  pause or resume the display
+?      toggle this help
+q      quit`
 
 // Source is a live stream of device reports.
 type Source interface {
@@ -75,6 +80,8 @@ type viewKey struct {
 	window        int
 	width, height int
 	help          bool
+	paused        bool
+	hidden        string
 	connected     bool
 	bucket        int64
 }
@@ -98,11 +105,24 @@ type Model struct {
 	help      bool
 	err       error
 	cache     *viewCache
+
+	// hidden is the devices left off the charts, so they scale to the others. It is replaced, not
+	// changed, by toggle, as models share it.
+	hidden map[string]bool
+
+	// paused freezes the drawing at pausedAt, and at the reports which had arrived by pausedVersion.
+	paused        bool
+	pausedAt      time.Time
+	pausedVersion uint64
 }
 
-// New returns a dashboard which displays the reports from the source.
+// New returns a dashboard which displays the reports from the source, with the outdoor sensor hidden
+// from the charts.
 func New(ctx context.Context, source Source, store *Store) Model {
-	return Model{ctx: ctx, source: source, store: store, window: defaultWindow, connected: true, cache: &viewCache{}}
+	m := Model{ctx: ctx, source: source, store: store, window: defaultWindow, connected: true, cache: &viewCache{}}
+
+	// The outdoor sensor starts hidden, as it stretches the charts well past the rooms.
+	return m.toggle(store.Outdoors)
 }
 
 // Err returns the failure which ended the dashboard, if any.
@@ -156,6 +176,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		case "?":
 			m.help = !m.help
+		case "o":
+			m = m.toggle(m.store.Outdoors)
+		case "1", "2", "3", "4", "5", "6", "7", "8":
+			if i := int(msg.String()[0] - '1'); i < len(m.store.Order) {
+				m = m.toggle(m.store.Order[i])
+			}
+		case " ":
+			m.paused = !m.paused
+			m.pausedAt, m.pausedVersion = time.Now(), m.store.version
 		case "w", "W":
 			step := 1
 			if msg.String() == "W" {
@@ -175,7 +204,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.store.Apply(z2m.Update(msg))
 		return m, m.wait()
 	case tickMsg:
-		m.connected = m.source.Connected()
+		if !m.paused {
+			m.connected = m.source.Connected()
+		}
+
 		return m, m.tick()
 	case errMsg:
 		if m.ctx.Err() == nil {
@@ -188,19 +220,67 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// toggle shows the device on the charts if it is hidden, and hides it if it is shown.
+func (m Model) toggle(device string) Model {
+	if device == "" {
+		return m
+	}
+
+	hidden := maps.Clone(m.hidden)
+	if hidden == nil {
+		hidden = map[string]bool{}
+	}
+
+	hidden[device] = !hidden[device]
+	m.hidden = hidden
+
+	return m
+}
+
+// hiddenKey returns the hidden devices as a string, for the key of a drawing.
+func (m Model) hiddenKey() string {
+	var names []string
+
+	for device, hide := range m.hidden {
+		if hide {
+			names = append(names, device)
+		}
+	}
+
+	slices.Sort(names)
+
+	return strings.Join(names, "\x00")
+}
+
 // cell returns the time covered by one cell of a chart, which is two braille dots wide.
 func (m Model) cell() time.Duration {
 	return windows[m.window] / time.Duration(max(m.width-2, 1)*2)
 }
 
+// now returns the time the drawing shows, which stands still while paused.
+func (m Model) now() time.Time {
+	if m.paused {
+		return m.pausedAt
+	}
+
+	return time.Now()
+}
+
 // viewKey returns what View would draw at the time depends on.
 func (m Model) viewKey(now time.Time) viewKey {
+	version := m.store.version
+	if m.paused {
+		version = m.pausedVersion
+	}
+
 	return viewKey{
-		version:   m.store.version,
+		version:   version,
 		window:    m.window,
 		width:     m.width,
 		height:    m.height,
 		help:      m.help,
+		paused:    m.paused,
+		hidden:    m.hiddenKey(),
 		connected: m.connected,
 		bucket:    now.UnixNano() / int64(m.cell()),
 	}
@@ -208,7 +288,7 @@ func (m Model) viewKey(now time.Time) viewKey {
 
 // View draws the dashboard, reusing the last drawing if nothing which it shows has changed.
 func (m Model) View() string {
-	now := time.Now()
+	now := m.now()
 	key := m.viewKey(now)
 
 	if m.cache.ok && m.cache.key == key {
@@ -230,10 +310,14 @@ func (m Model) draw(now time.Time) string {
 	from := now.Add(-windows[m.window])
 
 	if m.help {
-		return box("Help", helpText, m.width)
+		return box("Help", "", helpText, m.width)
 	}
 
 	devices := "Devices"
+
+	if m.paused {
+		devices += lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Render("  paused")
+	}
 
 	if !m.connected {
 		devices += lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Render("  reconnecting to broker...")
@@ -242,11 +326,11 @@ func (m Model) draw(now time.Time) string {
 	if len(m.store.Order) == 0 {
 		msg := "Waiting for devices to report; sensors only send when their reading changes."
 
-		return box(devices, msg, m.width)
+		return box(devices, "", msg, m.width)
 	}
 
 	batteries := m.store.batteries()
-	rows := []string{box(devices, m.store.legend(now), m.width)}
+	rows := []string{box(devices, formatWindow(windows[m.window]), m.store.legend(now, m.hidden), m.width)}
 
 	// Besides the charts there are the legend row, the two boiler rows, the battery rows and the
 	// borders of each box.
@@ -259,29 +343,40 @@ func (m Model) draw(now time.Time) string {
 	}
 
 	inner := m.width - 2
-	span := "(" + formatWindow(windows[m.window]) + ")"
 
-	temp := m.store.renderChart(Temperature, inner, tempH, from, now)
-	rows = append(rows, box("Temperature °C "+span, temp.view, m.width))
+	hide := m.hidden
+
+	temp := m.store.renderChart(Temperature, hide, inner, tempH, from, now)
+	rows = append(rows, box("Temperature °C", "", temp.view, m.width))
 
 	if humH > 0 {
-		humidity := m.store.renderChart(Humidity, inner, humH, from, now)
-		rows = append(rows, box("Humidity % "+span, humidity.view, m.width))
+		humidity := m.store.renderChart(Humidity, hide, inner, humH, from, now)
+		rows = append(rows, box("Humidity %", "", humidity.view, m.width))
 	}
 
-	rows = append(rows, box("Boiler "+span, strings.Join(m.store.boilerRows(temp, from, now), "\n"), m.width))
+	boiler := formatOn(boilerOnTime(m.store.Series[Boiler][m.store.Receiver.Name], from, now), windows[m.window])
+	rows = append(rows, box("Boiler "+boiler, "", strings.Join(m.store.boilerRows(temp, from, now), "\n"), m.width))
 
 	if len(batteries) > 0 {
-		rows = append(rows, box("Battery", strings.Join(batteries, "\n"), m.width))
+		rows = append(rows, box("Battery", "", strings.Join(batteries, "\n"), m.width))
 	}
 
 	return strings.Join(rows, "\n")
 }
 
-// box draws the body inside a border of the width, with the title set into the top edge.
-func box(title, body string, width int) string {
+// box draws the body inside a border of the width, with the title set into the top edge, and the
+// corner at its right end if there is room.
+func box(title, corner, body string, width int) string {
 	inner := width - 2
-	top := "┌─ " + title + " " + strings.Repeat("─", max(inner-lipgloss.Width(title)-3, 0)) + "┐"
+	fill := inner - lipgloss.Width(title) - 3
+
+	if corner != "" && fill >= lipgloss.Width(corner)+3 {
+		corner = " " + corner + " ─"
+	} else {
+		corner = ""
+	}
+
+	top := "┌─ " + title + " " + strings.Repeat("─", max(fill-lipgloss.Width(corner), 0)) + corner + "┐"
 
 	lines := []string{top}
 

@@ -126,7 +126,7 @@ func TestLegendMarksStaleDevices(t *testing.T) {
 	s.Apply(update(t, "office", now.Add(-5*time.Minute), `{"temperature":20.1}`))
 	s.Apply(update(t, "office", now.Add(-4*time.Hour), `{"battery":90}`))
 
-	legend := s.legend(now)
+	legend := s.legend(now, nil)
 
 	assert.Contains(t, legend, "hall 18.2°C (3h ago)")
 	assert.Contains(t, legend, "office 20.1°C")
@@ -274,11 +274,11 @@ func TestStoreRecordsTarget(t *testing.T) {
 	target, ok := s.Series[Target]["hive"].Last()
 	require.True(t, ok)
 	assert.Equal(t, 20.5, target.Value)
-	assert.Contains(t, s.legend(time.Unix(2, 0)), "target 20.5°C")
+	assert.Contains(t, s.legend(time.Unix(2, 0), nil), "target 20.5°C")
 }
 
 func TestBoxClipsAndPads(t *testing.T) {
-	got := box("T", "short\n"+strings.Repeat("x", 30), 12)
+	got := box("T", "", "short\n"+strings.Repeat("x", 30), 12)
 
 	for line := range strings.SplitSeq(got, "\n") {
 		assert.Equal(t, 12, lipgloss.Width(line), line)
@@ -397,4 +397,107 @@ func TestClampLoneOldPointOnceSpanned(t *testing.T) {
 	got := clamp(spanned(s, to), from)
 
 	assert.Equal(t, Series{{At: from, Value: 5}, {At: to, Value: 5}}, got)
+}
+
+func TestBoilerOnTime(t *testing.T) {
+	from, to := time.Unix(100, 0), time.Unix(200, 0)
+	s := Series{
+		{At: time.Unix(80, 0), Value: BoilerOn},
+		{At: time.Unix(120, 0), Value: BoilerOff},
+		{At: time.Unix(150, 0), Value: BoilerOn},
+	}
+
+	assert.Equal(t, 20*time.Second+50*time.Second, boilerOnTime(s, from, to))
+	assert.Zero(t, boilerOnTime(nil, from, to))
+}
+
+func TestFormatOn(t *testing.T) {
+	assert.Equal(t, "3h12m on (13%)", formatOn(3*time.Hour+12*time.Minute+30*time.Second, 24*time.Hour))
+}
+
+func TestPauseFreezesView(t *testing.T) {
+	store := NewStore(receiver)
+	store.Apply(update(t, "hall", time.Now(), `{"temperature":18.2}`))
+
+	m := New(t.Context(), feed{}, store)
+	next, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	next, _ = next.Update(tea.KeyMsg{Type: tea.KeySpace})
+	m = next.(Model)
+
+	paused := m.View()
+	assert.Contains(t, paused, "paused")
+
+	store.Apply(update(t, "hall", time.Now(), `{"temperature":19.2}`))
+	assert.Equal(t, paused, m.View())
+
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeySpace})
+	assert.NotContains(t, next.View(), "paused")
+}
+
+func TestHideOutdoors(t *testing.T) {
+	store := NewStore(receiver)
+	store.Outdoors = "garden"
+	store.Apply(update(t, "garden", time.Now(), `{"temperature":2.2}`))
+	store.Apply(update(t, "hall", time.Now(), `{"temperature":18.2}`))
+
+	now := time.Now()
+	shown := store.renderChart(Temperature, nil, 60, 10, now.Add(-time.Hour), now)
+	hidden := store.renderChart(Temperature, map[string]bool{store.Outdoors: true}, 60, 10, now.Add(-time.Hour), now)
+
+	assert.NotEqual(t, shown.view, hidden.view)
+	assert.Len(t, store.Series[Temperature], 2)
+}
+
+func TestBoxCorner(t *testing.T) {
+	top, _, _ := strings.Cut(box("Devices", "24h", "x", 30), "\n")
+	assert.Equal(t, "┌─ Devices ──────────── 24h ─┐", top)
+
+	top, _, _ = strings.Cut(box("Devices", "24h", "x", 12), "\n")
+	assert.Equal(t, "┌─ Devices ┐", top)
+}
+
+func TestTickLabels(t *testing.T) {
+	at := func(h, m, sec int) float64 {
+		return float64(time.Date(2026, 10, 23, h, m, sec, 0, time.Local).Unix())
+	}
+
+	label := tickLabels(time.Hour, time.Minute)
+
+	assert.Equal(t, "11:00", label(0, at(10, 59, 30)))
+	assert.Empty(t, label(0, at(10, 30, 0)))
+	assert.Equal(t, time.Hour, tickStep(6*time.Hour))
+	assert.Equal(t, 4*time.Hour, tickStep(24*time.Hour))
+}
+
+func TestBatteriesHiddenUntilLow(t *testing.T) {
+	store := NewStore(receiver)
+	store.Apply(update(t, "hall", time.Now(), `{"temperature":19.5,"battery":80}`))
+
+	assert.Nil(t, store.batteries())
+	assert.Equal(t, ", +1.5", store.gap("hall", 18))
+	assert.Empty(t, store.gap("garage", 18))
+
+	store.Apply(update(t, "hall", time.Now(), `{"battery":15}`))
+	assert.Len(t, store.batteries(), 1)
+}
+
+func TestToggleDevice(t *testing.T) {
+	store := NewStore(receiver)
+	store.Apply(update(t, "hall", time.Now(), `{"temperature":18.2}`))
+
+	m := New(t.Context(), feed{}, store)
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'1'}})
+	m = next.(Model)
+	assert.True(t, m.hidden["hall"])
+
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'1'}})
+	assert.False(t, next.(Model).hidden["hall"])
+}
+
+func TestOutdoorsStartHidden(t *testing.T) {
+	store := NewStore(receiver)
+	store.Outdoors = "garden"
+
+	assert.True(t, New(t.Context(), feed{}, store).hidden["garden"])
+	assert.Empty(t, New(t.Context(), feed{}, NewStore(receiver)).hidden)
 }

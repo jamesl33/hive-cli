@@ -47,6 +47,9 @@ type Store struct {
 	// Receiver is the Hive receiver; it reports the boiler and the Hive temperature.
 	Receiver hive.Receiver
 
+	// Outdoors is the friendly name of the outdoor sensor, which the charts can leave out.
+	Outdoors string
+
 	// Order is the devices sorted by name, so each gets the same colour on every run.
 	Order []string
 

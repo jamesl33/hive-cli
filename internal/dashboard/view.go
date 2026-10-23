@@ -2,12 +2,14 @@ package dashboard
 
 import (
 	"fmt"
+	"maps"
 	"math"
 	"slices"
 	"sort"
 	"strings"
 	"time"
 
+	"github.com/NimbleMarkets/ntcharts/linechart"
 	"github.com/NimbleMarkets/ntcharts/linechart/timeserieslinechart"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -19,6 +21,9 @@ const (
 	// lowBattery and mediumBattery are the percentages below which a battery is shown red and amber.
 	lowBattery    = 20
 	mediumBattery = 40
+
+	// maxToggles is the number of devices which can be hidden by number, which is the keys 1 to 8.
+	maxToggles = 8
 
 	// staleAfter is how long a device can go without reporting before the legend greys it out.
 	staleAfter = 2 * time.Hour
@@ -139,12 +144,21 @@ type chart struct {
 	width int
 }
 
-// renderChart draws a line for each device which has samples of the metric.
-func (s *Store) renderChart(metric Metric, w, h int, from, to time.Time) chart {
-	byDevice := s.Series[metric]
+// renderChart draws a line for each device which has samples of the metric, except the devices which
+// are hidden.
+func (s *Store) renderChart(metric Metric, hide map[string]bool, w, h int, from, to time.Time) chart {
+	byDevice := maps.Clone(s.Series[metric])
 	targets := map[string]Series{}
+
 	if metric == Temperature {
-		targets = s.Series[Target]
+		targets = maps.Clone(s.Series[Target])
+	}
+
+	for device, hidden := range hide {
+		if hidden {
+			delete(byDevice, device)
+			delete(targets, device)
+		}
 	}
 
 	lo, hi := valueRange(from, byDevice, targets)
@@ -152,10 +166,11 @@ func (s *Store) renderChart(metric Metric, w, h int, from, to time.Time) chart {
 	c := timeserieslinechart.New(w, h,
 		timeserieslinechart.WithTimeRange(from, to),
 		timeserieslinechart.WithYRange(lo, hi),
-		timeserieslinechart.WithXYSteps(6, 4),
-		timeserieslinechart.WithXLabelFormatter(timeserieslinechart.HourTimeLabelFormatter()),
+		timeserieslinechart.WithXYSteps(1, 4),
 		timeserieslinechart.WithYLabelFormatter(func(_ int, v float64) string { return fmt.Sprintf("%.1f", v) }),
 	)
+
+	c.XLabelFormatter = tickLabels(tickStep(to.Sub(from)), to.Sub(from)/time.Duration(c.GraphWidth()))
 
 	for i, device := range s.Order {
 		points := downsample(clamp(spanned(visible(byDevice[device], from), to), from), from, to, w*2)
@@ -180,6 +195,90 @@ func (s *Store) renderChart(metric Metric, w, h int, from, to time.Time) chart {
 	c.DrawBrailleAll()
 
 	return chart{view: c.View(), left: c.Origin().X + 1, width: c.GraphWidth()}
+}
+
+// tickSteps are the spacings of the labels on a time axis, which fall on multiples of the spacing.
+var tickSteps = []time.Duration{
+	10 * time.Second, 15 * time.Second, 30 * time.Second, time.Minute, 5 * time.Minute, 10 * time.Minute,
+	15 * time.Minute, 30 * time.Minute, time.Hour, 2 * time.Hour, 4 * time.Hour, 6 * time.Hour,
+}
+
+// maxTicks is the most labels on a time axis.
+const maxTicks = 6
+
+// tickStep returns the smallest spacing which gives the span no more than maxTicks labels.
+func tickStep(span time.Duration) time.Duration {
+	for _, step := range tickSteps {
+		if span/step <= maxTicks {
+			return step
+		}
+	}
+
+	return tickSteps[len(tickSteps)-1]
+}
+
+// tickLabels returns a formatter which labels a column of the axis with the time of the multiple of
+// step which falls in it, in local time, and leaves every other column blank. col is the time a
+// column covers.
+func tickLabels(step, col time.Duration) linechart.LabelFormatter {
+	layout := "15:04"
+	if step < time.Minute {
+		layout = "15:04:05"
+	}
+
+	return func(_ int, v float64) string {
+		secs, frac := math.Modf(v)
+		t := time.Unix(int64(secs), int64(frac*1e9))
+
+		// Truncate counts from the zero time, so shift the time to local wall clock first.
+		_, offset := t.Zone()
+		wall := t.Add(time.Duration(offset) * time.Second)
+
+		tick := wall.Add(col).Truncate(step)
+		if !tick.After(wall) {
+			return ""
+		}
+
+		return tick.UTC().Format(layout)
+	}
+}
+
+// boilerOnTime returns how long the boiler fired between from and to; a state is held until the next
+// sample, and the one before from holds into the span.
+func boilerOnTime(s Series, from, to time.Time) time.Duration {
+	var on time.Duration
+
+	s = visible(s, from)
+
+	for i, p := range s {
+		if p.Value != BoilerOn {
+			continue
+		}
+
+		start, end := p.At, to
+		if start.Before(from) {
+			start = from
+		}
+
+		if i+1 < len(s) && s[i+1].At.Before(to) {
+			end = s[i+1].At
+		}
+
+		on += end.Sub(start)
+	}
+
+	return max(on, 0)
+}
+
+// formatOn formats the time the boiler fired with its share of the span, e.g. 3h12m on (13%).
+func formatOn(on, span time.Duration) string {
+	pct := int(on * 100 / span)
+
+	if on < time.Hour {
+		return fmt.Sprintf("%dm on (%d%%)", int(on.Minutes()), pct)
+	}
+
+	return fmt.Sprintf("%dh%dm on (%d%%)", int(on.Hours()), int(on.Minutes())%60, pct)
 }
 
 // visible returns the points which can be seen from the time on: those after it, and the one before
@@ -313,9 +412,10 @@ func (s *Store) lastSeen(device string) time.Time {
 	return seen
 }
 
-// legend lists each device with its colour and latest readings; a device which has not reported for
-// staleAfter is greyed out and shows how long ago it did.
-func (s *Store) legend(now time.Time) string {
+// legend lists each device with its key, colour and latest readings; a device which has not reported
+// for staleAfter is greyed out and shows how long ago it did, and one hidden from the charts is
+// struck through.
+func (s *Store) legend(now time.Time, hide map[string]bool) string {
 	parts := make([]string, 0, len(s.Order))
 
 	for i, device := range s.Order {
@@ -332,15 +432,22 @@ func (s *Store) legend(now time.Time) string {
 			style = lipgloss.NewStyle().Foreground(staleColor)
 		}
 
-		part := style.Render("● " + text)
+		style = style.Strikethrough(hide[device])
+
+		key := ""
+		if i < maxToggles {
+			key = fmt.Sprintf("%d ", i+1)
+		}
+
+		part := style.Render(key + "● " + text)
 
 		if p, ok := s.Series[Target][device].Last(); ok {
-			targetStyle := lipgloss.NewStyle().Foreground(targetColor)
+			targetStyle := lipgloss.NewStyle().Foreground(targetColor).Strikethrough(hide[device])
 			if stale {
 				targetStyle = style
 			}
 
-			part += targetStyle.Render(fmt.Sprintf(" (target %.1f°C)", p.Value))
+			part += targetStyle.Render(fmt.Sprintf(" (target %.1f°C%s)", p.Value, s.gap(device, p.Value)))
 		}
 
 		text = ""
@@ -359,9 +466,23 @@ func (s *Store) legend(now time.Time) string {
 	return strings.Join(parts, "  ")
 }
 
-// batteries lists the battery level of each device which reports one.
+// gap returns the signed difference between the temperature of the device and the target, e.g. ", +0.4",
+// or nothing if it has no temperature.
+func (s *Store) gap(device string, target float64) string {
+	p, ok := s.Series[Temperature][device].Last()
+	if !ok {
+		return ""
+	}
+
+	return fmt.Sprintf(", %+.1f", p.Value-target)
+}
+
+// batteries lists the battery level of each device which reports one, but only if one of them is
+// below mediumBattery; until then there is nothing to act on.
 func (s *Store) batteries() []string {
 	var lines []string
+
+	low := false
 
 	width := 0
 	for device := range s.Series[Battery] {
@@ -374,8 +495,14 @@ func (s *Store) batteries() []string {
 			continue
 		}
 
+		low = low || p.Value < mediumBattery
+
 		name := lipgloss.NewStyle().Foreground(color(i)).Width(width).Render(device)
 		lines = append(lines, fmt.Sprintf("%s %s %3.0f%%", name, batteryBar(p.Value), p.Value))
+	}
+
+	if !low {
+		return nil
 	}
 
 	return lines

@@ -15,6 +15,8 @@ import (
 type Dashboard struct {
 	options *z2m.Options
 	dir     string
+
+	outdoors string
 }
 
 // NewDashboard creates a new command for displaying a live dashboard of the heating and sensors.
@@ -35,6 +37,8 @@ func NewDashboard(options *z2m.Options) *cobra.Command {
 		"directory with the history written by 'hive record' (HIVE_HISTORY)",
 	)
 
+	cmd.Flags().StringVar(&d.outdoors, "outdoors", "outdoors", "friendly name of the outdoor sensor, which 'o' hides on the charts")
+
 	return &cmd
 }
 
@@ -48,6 +52,7 @@ func (d *Dashboard) Run(ctx context.Context) error {
 	defer feed.Close()
 
 	store := dashboard.NewStore(feed.Receiver)
+	store.Outdoors = d.outdoors
 
 	model := dashboard.New(ctx, feed, store)
 

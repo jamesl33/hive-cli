@@ -29,6 +29,7 @@ hive record         record the dashboard's history to disk until stopped (30 day
 hive summary [first [last]]  mean/min/max per sensor, spread between rooms and boiler use for a day or range of days (default today)
 ```
 
+- Dashboard keys: `w`/`W` time window, `1`-`8` show or hide a device on the charts, `o` show or hide the outdoor sensor, which starts hidden (`--outdoors`, default `outdoors`), `space` pause, `?` help, `q` quit.
 - `record`, `dashboard` and `summary` share `--history` (`HIVE_HISTORY`, default `~/.local/state/hive`). The dashboard loads everything `record` wrote, then goes live.
 - Flags: `--broker` (`HIVE_BROKER`, default `tcp://localhost:1883`, `mqtts://` for TLS), `--username` (`HIVE_USERNAME`), `--password` (`HIVE_PASSWORD`).
 - Exactly one receiver must be paired with Zigbee2MQTT (base topic `zigbee2mqtt`).
