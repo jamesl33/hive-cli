@@ -52,9 +52,13 @@ boiler 3h16m on · 6 runs
 
 ## Install
 
+Needs Go 1.27+. Installs `hive` to `$GOBIN` (default `$GOPATH/bin`).
+
 ```sh
 make install
 ```
+
+Shell completion: `hive completion <bash|zsh|fish|powershell>`.
 
 ## Setup
 
