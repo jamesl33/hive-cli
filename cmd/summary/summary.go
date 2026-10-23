@@ -1,11 +1,13 @@
 package summary
 
 import (
+	"cmp"
 	"fmt"
 	"io"
-	"text/tabwriter"
+	"slices"
 	"time"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/jamesl33/hive-cli/internal/dashboard"
 	"github.com/jamesl33/hive-cli/internal/z2m"
 	"github.com/spf13/cobra"
@@ -74,34 +76,68 @@ func (s *Summary) Run(w io.Writer, args []string) error {
 
 	sum := dashboard.Summarize(samples, outdoors, day, end)
 
-	return write(w, sum, day, end)
+	write(w, sum, day, end)
+
+	return nil
 }
 
 // write writes the summary.
-func write(w io.Writer, sum dashboard.Summary, from, to time.Time) error {
-	fmt.Fprintf(w, "%s %s-%s\n\n", from.Format(dateLayout), from.Format("15:04"), to.Format("15:04"))
+func write(w io.Writer, sum dashboard.Summary, from, to time.Time) {
+	var (
+		bold = lipgloss.NewStyle().Bold(true)
+		dim  = lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
+		warm = lipgloss.NewStyle().Foreground(lipgloss.Color("208"))
+		cool = lipgloss.NewStyle().Foreground(lipgloss.Color("39"))
+		cell = lipgloss.NewStyle().Width(6).Align(lipgloss.Right)
+	)
 
-	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-
-	fmt.Fprintln(tw, "\tmean\tmin\tmax")
-
-	for _, d := range sum.Rooms {
-		fmt.Fprintf(tw, "%s\t%.1f\t%.1f\t%.1f\n", d.Device, d.Mean, d.Min, d.Max)
-	}
-
+	devices := slices.Clone(sum.Rooms)
 	if sum.Outdoors != nil {
-		d := sum.Outdoors
-		fmt.Fprintf(tw, "%s\t%.1f\t%.1f\t%.1f\n", d.Device, d.Mean, d.Min, d.Max)
+		devices = append(devices, *sum.Outdoors)
 	}
 
-	err := tw.Flush()
-	if err != nil {
-		return err
+	width := 0
+	for _, d := range devices {
+		width = max(width, lipgloss.Width(d.Device))
 	}
 
-	fmt.Fprintf(w, "\nspread between rooms: mean %.1f°C, max %.1f°C\n", sum.SpreadMean, sum.SpreadMax)
+	name := lipgloss.NewStyle().Width(width + 2)
+
+	fmt.Fprintf(w, "%s  %s\n\n", bold.Render(from.Format(dateLayout)), dim.Render(from.Format("15:04")+"–"+to.Format("15:04")))
+	fmt.Fprintf(w, "%s%s%s%s\n", name.Render(""), cell.Inherit(dim).Render("mean"), cell.Inherit(dim).Render("min"), cell.Inherit(dim).Render("max"))
+
+	// The warmest and coolest room by mean stand out
+	var hot, cold string
+
+	if len(sum.Rooms) > 1 {
+		hot = slices.MaxFunc(sum.Rooms, func(a, b dashboard.DeviceSummary) int { return cmp.Compare(a.Mean, b.Mean) }).Device
+		cold = slices.MinFunc(sum.Rooms, func(a, b dashboard.DeviceSummary) int { return cmp.Compare(a.Mean, b.Mean) }).Device
+	}
+
+	for _, d := range devices {
+		style := lipgloss.NewStyle()
+
+		switch d.Device {
+		case hot:
+			style = warm
+		case cold:
+			style = cool
+		case outdoors:
+			style = dim
+		}
+
+		// Each cell is styled on its own, as the reset after the bold mean would end the colour
+		fmt.Fprintln(
+			w,
+			style.Inherit(name).Render(d.Device)+
+				style.Inherit(cell).Bold(true).Render(fmt.Sprintf("%.1f", d.Mean))+
+				style.Inherit(cell).Render(fmt.Sprintf("%.1f", d.Min))+
+				style.Inherit(cell).Render(fmt.Sprintf("%.1f", d.Max)),
+		)
+	}
+
 	mins := int(sum.BoilerOn.Round(time.Minute).Minutes())
-	fmt.Fprintf(w, "boiler: on %dh%02dm, %d runs\n", mins/60, mins%60, sum.BoilerRuns)
 
-	return nil
+	fmt.Fprintf(w, "\n%s %s %s\n", dim.Render("spread"), bold.Render(fmt.Sprintf("%.1f°C", sum.SpreadMean)), dim.Render(fmt.Sprintf("mean · %.1f°C max", sum.SpreadMax)))
+	fmt.Fprintf(w, "%s %s %s\n", dim.Render("boiler"), bold.Render(fmt.Sprintf("%dh%02dm", mins/60, mins%60)), dim.Render(fmt.Sprintf("on · %d runs", sum.BoilerRuns)))
 }
