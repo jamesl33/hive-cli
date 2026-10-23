@@ -12,6 +12,7 @@ import (
 	"github.com/jamesl33/hive-cli/cmd/record"
 	"github.com/jamesl33/hive-cli/cmd/schedule"
 	"github.com/jamesl33/hive-cli/cmd/status"
+	"github.com/jamesl33/hive-cli/cmd/summary"
 	"github.com/jamesl33/hive-cli/internal/z2m"
 	"github.com/spf13/cobra"
 )
@@ -69,6 +70,7 @@ func init() {
 		record.NewRecord(&options),
 		schedule.NewSchedule(&options),
 		status.NewStatus(&options),
+		summary.NewSummary(),
 	)
 }
 
