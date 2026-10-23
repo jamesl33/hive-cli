@@ -102,8 +102,20 @@ func (s *Summary) Run(w io.Writer, args []string) error {
 		return fmt.Errorf("failed to load history: %w", err)
 	}
 
-	if len(samples) == 0 || !end.After(first) {
+	if len(samples) == 0 {
 		return fmt.Errorf("no history for %s in %s", first.Format(dateLayout), s.dir)
+	}
+
+	// Days before the history starts have nothing to summarise.
+	requested := first
+
+	y, m, d = samples[0].At.In(now.Location()).Date()
+	if began := time.Date(y, m, d, 0, 0, 0, 0, now.Location()); began.After(first) {
+		first = began
+	}
+
+	if !end.After(first) {
+		return fmt.Errorf("no history for %s in %s", requested.Format(dateLayout), s.dir)
 	}
 
 	sum := dashboard.Summarize(samples, s.outdoors, first, end)
@@ -159,7 +171,7 @@ func rowStyles(sum dashboard.Summary, outdoors string) map[string]lipgloss.Style
 	return styles
 }
 
-// writeHeader writes the days, the time they cover if not whole and the column names.
+// writeHeader writes the days, when they end if not whole and the column names.
 func writeHeader(w io.Writer, name lipgloss.Style, from, to time.Time) {
 	days := from.Format(dateLayout)
 
@@ -175,7 +187,7 @@ func writeHeader(w io.Writer, name lipgloss.Style, from, to time.Time) {
 
 	// The time only says something when the period ends part way through a day.
 	if to.Format("15:04:05") != "00:00:00" {
-		fmt.Fprint(w, "  ", dim.Render(from.Format("15:04")+"–"+to.Format("15:04")))
+		fmt.Fprint(w, "  ", dim.Render("until "+to.Format("15:04")))
 	}
 
 	fmt.Fprintf(w, "\n\n%s%s%s%s\n", name.Render(""), columns.Render("mean"), columns.Render("min"), columns.Render("max"))
