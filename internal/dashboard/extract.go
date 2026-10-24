@@ -18,6 +18,11 @@ const (
 	Battery     Metric = "battery"
 	Boiler      Metric = "boiler"
 	Target      Metric = "target"
+
+	// Gas is the kWh of gas used in the half hour starting at the sample, from the smart meter. It is
+	// recorded for analysis and is not shown by the dashboard. As with every metric a repeated value
+	// is dropped, so a half hour without a sample has the value of the one before.
+	Gas Metric = "gas"
 )
 
 // Values of the Boiler metric.
@@ -152,6 +157,10 @@ func (s *Store) Reload(from time.Time) error {
 
 // add appends a sample to its series.
 func (s *Store) add(sample Sample) {
+	if sample.Metric == Gas {
+		return
+	}
+
 	s.version++
 
 	if s.Series[sample.Metric] == nil {
