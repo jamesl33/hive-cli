@@ -18,9 +18,6 @@ import (
 )
 
 const (
-	// retention is how long recorded history is kept.
-	retention = 30 * 24 * time.Hour
-
 	// daySpan is the time covered by each file.
 	daySpan = 24 * time.Hour
 
@@ -124,8 +121,8 @@ func parseRecord(line string) (record, bool) {
 //
 // A measurement is dropped if it rounds to the value already recorded, and the rest are held in
 // memory until Flush appends them to the file of their day. Files are named for the UTC day and are
-// deleted once they are older than the retention. Each file starts with the value of every series at
-// the start of the day, so reading a day never needs the one before it.
+// never deleted. Each file starts with the value of every series at the start of the day, so reading a
+// day never needs the one before it.
 type Log struct {
 	dir string
 
@@ -225,7 +222,6 @@ func (l *Log) roll(at time.Time) {
 	_ = l.write() // Kept in memory and written with the next flush if this fails
 
 	l.day = day
-	l.prune()
 
 	_, err := os.Stat(l.path())
 	if err == nil {
@@ -273,21 +269,6 @@ func (l *Log) write() error {
 	l.pending = l.pending[:0]
 
 	return nil
-}
-
-// prune deletes the files which are older than the retention. It is best effort, as a file which is
-// left behind is deleted by the next day's prune.
-func (l *Log) prune() {
-	days, err := listDays(l.dir)
-	if err != nil {
-		return
-	}
-
-	for _, d := range days {
-		if l.day.Sub(d) > retention {
-			_ = os.Remove(dayPath(l.dir, d))
-		}
-	}
 }
 
 // path returns the file of the current day.

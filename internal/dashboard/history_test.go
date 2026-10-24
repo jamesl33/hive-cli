@@ -116,19 +116,14 @@ func TestLogReopenKeepsLastValues(t *testing.T) {
 	assert.Equal(t, 89.0, got[1].Value)
 }
 
-func TestLogPrunesOldDays(t *testing.T) {
+func TestLogKeepsOldDays(t *testing.T) {
 	l, dir := openLog(t)
 
 	l.Add(sample("office", Battery, day1, 90))
 	require.NoError(t, l.Flush(day1))
 
-	// The 29th and 31st days after
-	require.NoError(t, l.Flush(day1.Add(29*24*time.Hour)))
+	require.NoError(t, l.Flush(day1.Add(400*24*time.Hour)))
 	assert.FileExists(t, filepath.Join(dir, "2026-10-22.log"))
-
-	require.NoError(t, l.Flush(day1.Add(31*24*time.Hour)))
-	assert.NoFileExists(t, filepath.Join(dir, "2026-10-22.log"))
-	assert.FileExists(t, filepath.Join(dir, "2026-11-22.log"))
 }
 
 func TestLogTimeGoingBackIsRecordedInCurrentDay(t *testing.T) {
