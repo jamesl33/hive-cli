@@ -86,3 +86,29 @@ func TestConsumptionStatus(t *testing.T) {
 	_, err := c.Consumption(t.Context(), time.Now())
 	assert.ErrorContains(t, err, "401")
 }
+
+func TestConsumptionTooManyPages(t *testing.T) {
+	var srv *httptest.Server
+
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprintf(w, `{"next":%q,"results":[]}`, srv.URL+"/more")
+	}))
+	defer srv.Close()
+
+	c := Client{BaseURL: srv.URL, Key: "sk_test", Fuel: FuelGas, Point: "123", Serial: "G4", Units: UnitsKWh}
+
+	_, err := c.Consumption(t.Context(), time.Now())
+	assert.ErrorContains(t, err, "pages of consumption")
+}
+
+func TestConsumptionMalformed(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprint(w, `{"results":`)
+	}))
+	defer srv.Close()
+
+	c := Client{BaseURL: srv.URL, Key: "sk_test", Fuel: FuelGas, Point: "123", Serial: "G4", Units: UnitsKWh}
+
+	_, err := c.Consumption(t.Context(), time.Now())
+	assert.ErrorContains(t, err, "failed to read consumption")
+}

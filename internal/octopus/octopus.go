@@ -94,7 +94,7 @@ type page struct {
 	Results []reading `json:"results"`
 }
 
-// Consumption returns the half hours which started at or after from, oldest first.
+// Consumption returns the half hours which started at or after from, in the order the API returns them.
 func (c *Client) Consumption(ctx context.Context, from time.Time) ([]Interval, error) {
 	q := url.Values{
 		"period_from": {from.UTC().Format(time.RFC3339)},
@@ -119,10 +119,7 @@ func (c *Client) Consumption(ctx context.Context, from time.Time) ([]Interval, e
 			return nil, err
 		}
 
-		for _, r := range p.Results {
-			i := Interval{Start: r.Start.UTC(), KWh: c.kWh(r.Consumption)}
-			intervals = append(intervals, i)
-		}
+		intervals = append(intervals, c.intervals(p)...)
 
 		if p.Next == "" {
 			return intervals, nil
@@ -137,6 +134,17 @@ func (c *Client) Consumption(ctx context.Context, from time.Time) ([]Interval, e
 	}
 
 	return nil, fmt.Errorf("more than %d pages of consumption", maxPages)
+}
+
+// intervals returns the half hours in the page.
+func (c *Client) intervals(p page) []Interval {
+	intervals := make([]Interval, 0, len(p.Results))
+
+	for _, r := range p.Results {
+		intervals = append(intervals, Interval{Start: r.Start.UTC(), KWh: c.kWh(r.Consumption)})
+	}
+
+	return intervals
 }
 
 // kWh returns the energy in a consumption reading.
