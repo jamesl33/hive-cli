@@ -6,10 +6,10 @@ import "time"
 const (
 	// maxAge is how long samples are kept in memory, which is as far back as the longest window. The
 	// history on disk is kept indefinitely.
-	maxAge = 30 * 24 * time.Hour
+	maxAge = 360 * 24 * time.Hour
 
 	// maxPoints is the most samples kept for a series.
-	maxPoints = 50000
+	maxPoints = 200000
 )
 
 // Point is a value at a point in time.

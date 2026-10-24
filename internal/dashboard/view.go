@@ -461,7 +461,7 @@ func (s *Store) renderUsage(w, h int, from, now time.Time, hide map[string]bool)
 var tickSteps = []time.Duration{
 	10 * time.Second, 15 * time.Second, 30 * time.Second, time.Minute, 5 * time.Minute, 10 * time.Minute,
 	15 * time.Minute, 30 * time.Minute, time.Hour, 2 * time.Hour, 4 * time.Hour, 6 * time.Hour,
-	24 * time.Hour, 48 * time.Hour, 7 * 24 * time.Hour,
+	24 * time.Hour, 48 * time.Hour, 7 * 24 * time.Hour, 30 * 24 * time.Hour, 90 * 24 * time.Hour,
 }
 
 // maxTicks is the most labels on a time axis.
@@ -485,6 +485,8 @@ func tickLabels(step, col time.Duration) linechart.LabelFormatter {
 	layout := "15:04"
 
 	switch {
+	case step >= 7*24*time.Hour:
+		layout = "02 Jan"
 	case step >= 24*time.Hour:
 		layout = "Mon 02"
 	case step < time.Minute:
