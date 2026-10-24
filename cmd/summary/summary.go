@@ -31,6 +31,12 @@ var (
 
 	// cell is the style of a number in the table.
 	cell = lipgloss.NewStyle().Width(6).Align(lipgloss.Right)
+
+	// statLabel is the style of the label of a footer line, as wide as the longest fuel name.
+	statLabel = lipgloss.NewStyle().Width(len("electricity") + 1)
+
+	// statValue is the style of the value of a footer line.
+	statValue = lipgloss.NewStyle().Width(7).Align(lipgloss.Right)
 )
 
 // Summary defines the struct for the summary command.
@@ -210,13 +216,11 @@ func writeRow(w io.Writer, name, style lipgloss.Style, d dashboard.DeviceSummary
 func writeFooter(w io.Writer, sum dashboard.Summary) {
 	mins := int(sum.BoilerOn.Round(time.Minute).Minutes())
 
-	spread := bold.Render(fmt.Sprintf("%.1f°C", sum.SpreadMean))
-	spreadDetail := dim.Render(fmt.Sprintf("mean · %.1f°C max", sum.SpreadMax))
-	boilerOn := bold.Render(fmt.Sprintf("%dh%02dm", mins/60, mins%60))
-	boilerDetail := dim.Render(fmt.Sprintf("on · %d runs", sum.BoilerRuns))
+	fmt.Fprintln(w)
+	writeStat(w, "spread", fmt.Sprintf("%.1f°C", sum.SpreadMean), fmt.Sprintf("mean · %.1f°C max", sum.SpreadMax))
+	writeStat(w, "boiler", fmt.Sprintf("%dh%02dm", mins/60, mins%60), fmt.Sprintf("on · %d runs", sum.BoilerRuns))
 
-	fmt.Fprintf(w, "\n%s %s %s\n", dim.Render("spread"), spread, spreadDetail)
-	fmt.Fprintf(w, "%s %s %s\n", dim.Render("boiler"), boilerOn, boilerDetail)
+	blank := true
 
 	for _, fuel := range []dashboard.Metric{dashboard.Gas, dashboard.Electricity} {
 		kwh, ok := sum.Fuels[fuel]
@@ -224,6 +228,18 @@ func writeFooter(w io.Writer, sum dashboard.Summary) {
 			continue
 		}
 
-		fmt.Fprintf(w, "%s %s %s\n", dim.Render(string(fuel)), bold.Render(fmt.Sprintf("%.1f", kwh)), dim.Render("kWh"))
+		// Fuels are a group of their own, set apart by a blank line.
+		if blank {
+			fmt.Fprintln(w)
+
+			blank = false
+		}
+
+		writeStat(w, string(fuel), fmt.Sprintf("%.1f", kwh), "kWh")
 	}
+}
+
+// writeStat writes a line of the footer: a label, a value and its detail, each in a column of its own.
+func writeStat(w io.Writer, label, value, detail string) {
+	fmt.Fprintln(w, dim.Inherit(statLabel).Render(label)+bold.Inherit(statValue).Render(value)+" "+dim.Render(detail))
 }
