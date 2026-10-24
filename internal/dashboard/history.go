@@ -44,14 +44,14 @@ type record struct {
 	steps int
 }
 
-// stepsPerUnit is how finely a metric is recorded: temperatures and targets to 0.1°C, gas to the Wh
+// stepsPerUnit is how finely a metric is recorded: temperatures and targets to 0.1°C, gas and electricity to the Wh
 // and everything else to a whole number. Anything smaller is sensor noise, and recording it would
 // write on every report.
 func stepsPerUnit(m Metric) float64 {
 	switch m {
 	case Temperature, Target:
 		return 10
-	case Gas:
+	case Gas, Electricity:
 		return 1000
 	}
 

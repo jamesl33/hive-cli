@@ -23,6 +23,10 @@ const (
 	// drawn on the usage chart. As with every metric a repeated value is dropped, so a half hour
 	// without a sample has the value of the one before.
 	Gas Metric = "gas"
+
+	// Electricity is the kWh of electricity used in the half hour starting at the sample, recorded
+	// like Gas.
+	Electricity Metric = "electricity"
 )
 
 // Values of the Boiler metric.

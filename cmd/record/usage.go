@@ -1,0 +1,134 @@
+package record
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"time"
+
+	"github.com/jamesl33/hive-cli/internal/dashboard"
+	"github.com/jamesl33/hive-cli/internal/octopus"
+)
+
+const (
+	// usageEvery is how often the smart meter readings are fetched. Octopus publishes them about a day late.
+	usageEvery = time.Hour
+
+	// usageBackfill is how far back the first fetch goes, within what the history keeps.
+	usageBackfill = 28 * 24 * time.Hour
+)
+
+// meterOptions defines the options for recording the energy used by one meter, which is skipped if none
+// are set.
+type meterOptions struct {
+	fuel   octopus.Fuel
+	point  string
+	serial string
+	units  string
+	cv     float64
+}
+
+// metric returns the metric the meter's use is recorded as, which is named for the fuel. It is also the
+// device.
+func metric(fuel octopus.Fuel) dashboard.Metric {
+	return dashboard.Metric(fuel)
+}
+
+// client returns the Octopus client, or nil if the meter isn't being recorded.
+func (o meterOptions) client(key string) (*octopus.Client, error) {
+	if o.point == "" && o.serial == "" {
+		return nil, nil
+	}
+
+	if key == "" || o.point == "" || o.serial == "" {
+		return nil, fmt.Errorf("OCTOPUS_API_KEY and the %s meter point and serial must all be set", o.fuel)
+	}
+
+	units := octopus.Units(o.units)
+	if o.fuel == octopus.Gas && units != octopus.M3 && units != octopus.KWh {
+		return nil, fmt.Errorf("unknown gas units %q, expected %s or %s", o.units, octopus.M3, octopus.KWh)
+	}
+
+	c := octopus.Client{
+		BaseURL:        octopus.BaseURL,
+		Key:            key,
+		Fuel:           o.fuel,
+		Point:          o.point,
+		Serial:         o.serial,
+		Units:          units,
+		CalorificValue: o.cv,
+	}
+
+	return &c, nil
+}
+
+// usageLoop records the energy used until the context is cancelled. A failed fetch is retried at the
+// next one.
+func usageLoop(ctx context.Context, c *octopus.Client, log *dashboard.Log, dir string) {
+	after, err := latestUsage(dir, metric(c.Fuel))
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+	}
+
+	t := time.NewTicker(usageEvery)
+	defer t.Stop()
+
+	for {
+		after, err = recordUsage(ctx, c, log, after)
+		if err != nil && ctx.Err() == nil {
+			fmt.Fprintln(os.Stderr, err)
+		}
+
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+	}
+}
+
+// latestUsage returns the start of the newest half hour of the metric in the history, or the zero time
+// if there is none.
+func latestUsage(dir string, m dashboard.Metric) (time.Time, error) {
+	samples, err := dashboard.Load(dir, time.Now().Add(-usageBackfill))
+	if err != nil {
+		return time.Time{}, fmt.Errorf("failed to load %s history: %w", m, err)
+	}
+
+	var latest time.Time
+
+	for _, s := range samples {
+		if s.Metric == m {
+			latest = s.At
+		}
+	}
+
+	return latest, nil
+}
+
+// recordUsage adds the half hours after the time to the log, returning the start of the newest.
+func recordUsage(ctx context.Context, c *octopus.Client, log *dashboard.Log, after time.Time) (time.Time, error) {
+	from := after
+	if from.IsZero() {
+		from = time.Now().Add(-usageBackfill)
+	}
+
+	intervals, err := c.Consumption(ctx, from)
+	if err != nil {
+		return after, err
+	}
+
+	m := metric(c.Fuel)
+
+	for _, i := range intervals {
+		if !i.Start.After(after) {
+			continue
+		}
+
+		log.Add(dashboard.Sample{Device: string(m), Metric: m, At: i.Start, Value: i.KWh})
+
+		after = i.Start
+	}
+
+	return after, nil
+}

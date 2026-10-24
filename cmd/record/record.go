@@ -24,12 +24,17 @@ const flushEvery = 10 * time.Minute
 type Record struct {
 	options *z2m.Options
 	dir     string
-	gas     gasOptions
+	gas     meterOptions
+	power   meterOptions
 }
 
 // NewRecord creates a new command for recording the history shown by the dashboard.
 func NewRecord(options *z2m.Options) *cobra.Command {
-	r := Record{options: options}
+	r := Record{
+		options: options,
+		gas:     meterOptions{fuel: octopus.Gas},
+		power:   meterOptions{fuel: octopus.Electricity},
+	}
 
 	cmd := cobra.Command{
 		Short: "Record the history of the sensors and heating until stopped",
@@ -46,7 +51,7 @@ func NewRecord(options *z2m.Options) *cobra.Command {
 	)
 
 	cmd.Flags().StringVar(
-		&r.gas.mprn,
+		&r.gas.point,
 		"octopus-mprn",
 		z2m.Env("OCTOPUS_MPRN", ""),
 		"gas meter point number, to record the gas used; also needs OCTOPUS_API_KEY (OCTOPUS_MPRN)",
@@ -68,6 +73,20 @@ func NewRecord(options *z2m.Options) *cobra.Command {
 
 	cmd.Flags().Float64Var(&r.gas.cv, "gas-cv", 39.5, "calorific value in MJ/m³ from the gas bill, used when the meter reports m3")
 
+	cmd.Flags().StringVar(
+		&r.power.point,
+		"octopus-mpan",
+		z2m.Env("OCTOPUS_MPAN", ""),
+		"electricity meter point number, to record the electricity used; also needs OCTOPUS_API_KEY (OCTOPUS_MPAN)",
+	)
+
+	cmd.Flags().StringVar(
+		&r.power.serial,
+		"octopus-electricity-serial",
+		z2m.Env("OCTOPUS_ELECTRICITY_SERIAL", ""),
+		"electricity meter serial number (OCTOPUS_ELECTRICITY_SERIAL)",
+	)
+
 	return &cmd
 }
 
@@ -79,9 +98,19 @@ func (r *Record) Run(ctx context.Context) error {
 	}
 
 	// The key is only read from the environment, as a flag is visible to every user in the process list
-	gas, err := r.gas.client(os.Getenv("OCTOPUS_API_KEY"))
-	if err != nil {
-		return err
+	key := os.Getenv("OCTOPUS_API_KEY")
+
+	var meters []*octopus.Client
+
+	for _, o := range []meterOptions{r.gas, r.power} {
+		c, err := o.client(key)
+		if err != nil {
+			return err
+		}
+
+		if c != nil {
+			meters = append(meters, c)
+		}
 	}
 
 	feed, err := z2m.Watch(ctx, r.options)
@@ -97,8 +126,8 @@ func (r *Record) Run(ctx context.Context) error {
 
 	wg.Go(func() { flushLoop(ctx, log) })
 
-	if gas != nil {
-		wg.Go(func() { gasLoop(ctx, gas, log, r.dir) })
+	for _, c := range meters {
+		wg.Go(func() { usageLoop(ctx, c, log, r.dir) })
 	}
 
 	err = consume(ctx, feed, log)

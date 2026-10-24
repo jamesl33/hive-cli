@@ -45,7 +45,7 @@ const (
 )
 
 // usageColors are the metrics of energy used, which the usage chart draws, with their colours.
-var usageColors = map[Metric]lipgloss.Color{Gas: "214"}
+var usageColors = map[Metric]lipgloss.Color{Gas: "214", Electricity: "39"}
 
 // palette is the colours of the devices, in the order of their names.
 var palette = []lipgloss.Color{"39", "208", "42", "205", "220", "141", "51", "203"}

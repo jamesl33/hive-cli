@@ -1,4 +1,4 @@
-// Package octopus reads gas consumption from the Octopus Energy API.
+// Package octopus reads gas and electricity consumption from the Octopus Energy API.
 package octopus
 
 import (
@@ -27,16 +27,26 @@ const (
 	mjPerKWh   = 3.6
 )
 
+// Fuel is what a meter measures, as named in the API.
+type Fuel string
+
+// Fuels.
+const (
+	Gas         Fuel = "gas"
+	Electricity Fuel = "electricity"
+)
+
 // Units is what the meter reports consumption in.
 type Units string
 
-// Units of consumption: SMETS2 meters report volume, SMETS1 meters energy.
+// Units of consumption: SMETS2 gas meters report volume, SMETS1 gas meters energy. Electricity meters
+// always report energy.
 const (
 	M3  Units = "m3"
 	KWh Units = "kwh"
 )
 
-// Interval is the gas used in a half hour.
+// Interval is the energy used in a half hour.
 type Interval struct {
 	// Start is when the half hour began.
 	Start time.Time
@@ -45,7 +55,7 @@ type Interval struct {
 	KWh float64
 }
 
-// Client reads the consumption of a gas meter.
+// Client reads the consumption of a meter.
 type Client struct {
 	// BaseURL is the API; BaseURL unless testing.
 	BaseURL string
@@ -53,10 +63,13 @@ type Client struct {
 	// Key is the API key.
 	Key string
 
-	// MPRN and Serial identify the gas meter.
-	MPRN, Serial string
+	// Fuel is what the meter measures.
+	Fuel Fuel
 
-	// Units is what the meter reports consumption in.
+	// Point is the MPRN of a gas meter or the MPAN of an electricity meter, and Serial is the meter's.
+	Point, Serial string
+
+	// Units is what a gas meter reports consumption in.
 	Units Units
 
 	// CalorificValue is the MJ/m³ of the gas, from the bill, to convert a volume to energy.
@@ -84,9 +97,10 @@ func (c *Client) Consumption(ctx context.Context, from time.Time) ([]Interval, e
 	}
 
 	next := fmt.Sprintf(
-		"%s/v1/gas-meter-points/%s/meters/%s/consumption/?%s",
+		"%s/v1/%s-meter-points/%s/meters/%s/consumption/?%s",
 		c.BaseURL,
-		url.PathEscape(c.MPRN),
+		c.Fuel,
+		url.PathEscape(c.Point),
 		url.PathEscape(c.Serial),
 		q.Encode(),
 	)
@@ -121,7 +135,7 @@ func (c *Client) Consumption(ctx context.Context, from time.Time) ([]Interval, e
 
 // kWh returns the energy in a consumption reading.
 func (c *Client) kWh(v float64) float64 {
-	if c.Units == KWh {
+	if c.Fuel == Electricity || c.Units == KWh {
 		return v
 	}
 

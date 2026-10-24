@@ -31,7 +31,7 @@ func TestConsumption(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := Client{BaseURL: srv.URL, Key: "sk_test", MPRN: "123", Serial: "G4", Units: M3, CalorificValue: 39.5}
+	c := Client{BaseURL: srv.URL, Key: "sk_test", Fuel: Gas, Point: "123", Serial: "G4", Units: M3, CalorificValue: 39.5}
 
 	got, err := c.Consumption(t.Context(), time.Date(2026, 10, 24, 0, 0, 0, 0, time.UTC))
 	require.NoError(t, err)
@@ -43,8 +43,24 @@ func TestConsumption(t *testing.T) {
 }
 
 func TestConsumptionKWh(t *testing.T) {
-	c := Client{Units: KWh, CalorificValue: 39.5}
+	c := Client{Fuel: Gas, Units: KWh, CalorificValue: 39.5}
 	assert.Equal(t, 0.75, c.kWh(0.75))
+}
+
+func TestConsumptionElectricity(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/v1/electricity-meter-points/456/meters/E1/consumption/", r.URL.Path)
+		fmt.Fprint(w, `{"next":null,"results":[{"consumption":0.4,"interval_start":"2026-10-24T00:00:00Z"}]}`)
+	}))
+	defer srv.Close()
+
+	// Electricity is energy whatever the units say
+	c := Client{BaseURL: srv.URL, Key: "sk_test", Fuel: Electricity, Point: "456", Serial: "E1", Units: M3, CalorificValue: 39.5}
+
+	got, err := c.Consumption(t.Context(), time.Now())
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	assert.Equal(t, 0.4, got[0].KWh)
 }
 
 func TestConsumptionForeignNextPage(t *testing.T) {
@@ -53,7 +69,7 @@ func TestConsumptionForeignNextPage(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := Client{BaseURL: srv.URL, Key: "sk_test", MPRN: "123", Serial: "G4", Units: KWh}
+	c := Client{BaseURL: srv.URL, Key: "sk_test", Fuel: Gas, Point: "123", Serial: "G4", Units: KWh}
 
 	_, err := c.Consumption(t.Context(), time.Now())
 	assert.ErrorContains(t, err, "unexpected next page")
@@ -65,7 +81,7 @@ func TestConsumptionStatus(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := Client{BaseURL: srv.URL, Key: "bad", MPRN: "123", Serial: "G4", Units: KWh}
+	c := Client{BaseURL: srv.URL, Key: "bad", Fuel: Gas, Point: "123", Serial: "G4", Units: KWh}
 
 	_, err := c.Consumption(t.Context(), time.Now())
 	assert.ErrorContains(t, err, "401")
