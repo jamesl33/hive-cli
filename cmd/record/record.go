@@ -76,8 +76,8 @@ func NewRecord(options *z2m.Options) *cobra.Command {
 	cmd.Flags().StringVar(
 		&r.power.point,
 		"octopus-mpan",
-		z2m.Env("OCTOPUS_MPAN", ""),
-		"electricity meter point number, to record the electricity used; also needs OCTOPUS_API_KEY (OCTOPUS_MPAN)",
+		z2m.Env("OCTOPUS_ELECTRICITY_MPAN", ""),
+		"electricity meter point number, to record the electricity used; also needs OCTOPUS_API_KEY (OCTOPUS_ELECTRICITY_MPAN)",
 	)
 
 	cmd.Flags().StringVar(
