@@ -355,15 +355,15 @@ func (m Model) draw(now time.Time) string {
 	tempH, usageH := m.height-1-2*boxes-2-len(batteries), 0
 
 	if hasUsage {
-		tempH, usageH = tempH*3/5, tempH-tempH*3/5
+		tempH, usageH = tempH/2, tempH-tempH/2
 	}
 
 	hide := m.hidden
 
-	// Humidity shares the top row with the temperature, which has the wider share
+	// Humidity shares the top row with the temperature, half each
 	tempW, humW := m.width, 0
 	if hasHumidity {
-		humW = m.width * 2 / 5
+		humW = m.width / 2
 		tempW = m.width - humW
 	}
 
