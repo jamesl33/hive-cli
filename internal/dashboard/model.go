@@ -51,7 +51,8 @@ const helpText = `w      next time window
 W      previous time window
 1-8    show or hide a device on the charts
 o      show or hide the outdoor sensor on the charts
-space  pause or resume the display
+g, e   show or hide gas or electricity on the usage chart
+space pause or resume the display
 ?      toggle this help
 q      quit`
 
@@ -193,6 +194,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.help = !m.help
 		case "o":
 			m = m.toggle(m.store.Outdoors)
+		case "g":
+			m = m.toggle(string(Gas))
+		case "e":
+			m = m.toggle(string(Electricity))
 		case "1", "2", "3", "4", "5", "6", "7", "8":
 			if i := int(msg.String()[0] - '1'); i < len(m.store.Order) {
 				m = m.toggle(m.store.Order[i])
@@ -378,11 +383,11 @@ func (m Model) draw(now time.Time) string {
 	rows = append(rows, lipgloss.JoinHorizontal(lipgloss.Top, top...))
 
 	if hasUsage {
-		rows = append(rows, box("Fuels", "7d", m.store.fuels(now), m.width))
+		rows = append(rows, box("Fuels", "7d", m.store.fuels(now, hide), m.width))
 	}
 
 	if hasUsage && usageH >= minUsageHeight {
-		usage := m.store.renderUsage(m.width-2, usageH, now)
+		usage := m.store.renderUsage(m.width-2, usageH, now, hide)
 		rows = append(rows, box("Usage kWh/30m, 7d", m.store.usageCorner(now), usage, m.width))
 	}
 

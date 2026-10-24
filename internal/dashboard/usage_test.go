@@ -42,7 +42,29 @@ func TestFuelsSumsTheSpan(t *testing.T) {
 	s.add(Sample{Device: "gas", Metric: Gas, At: now.Add(-2 * usageStep), Value: 0.5})
 	s.add(Sample{Device: "gas", Metric: Gas, At: now.Add(-usageStep), Value: 0.5})
 
-	assert.Contains(t, s.fuels(now), "gas 1.0 kWh")
+	assert.Contains(t, s.fuels(now, nil), "gas 1.0 kWh")
+}
+
+func TestFuelKeysHideFuels(t *testing.T) {
+	store := NewStore(receiver)
+	now := time.Now()
+
+	store.add(Sample{Device: "hall", Metric: Temperature, At: now.Add(-time.Hour), Value: 18})
+	store.add(Sample{Device: "gas", Metric: Gas, At: now.Add(-30 * time.Hour), Value: 0.5})
+	store.add(Sample{Device: "electricity", Metric: Electricity, At: now.Add(-30 * time.Hour), Value: 0.2})
+
+	m := New(t.Context(), feed{}, store)
+	next, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	next, _ = next.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("g")})
+
+	hidden := next.(Model).hidden
+	assert.True(t, hidden["gas"])
+	assert.False(t, hidden["electricity"])
+	// The chart scales to the fuel which is left: with gas hidden it peaks at electricity's 0.2.
+	assert.Contains(t, m.store.renderUsage(98, 6, now, hidden), "0.2")
+
+	next, _ = next.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("g")})
+	assert.False(t, next.(Model).hidden["gas"])
 }
 
 func TestViewShowsUsage(t *testing.T) {
