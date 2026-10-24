@@ -52,30 +52,30 @@ func NewRecord(options *z2m.Options) *cobra.Command {
 
 	cmd.Flags().StringVar(
 		&r.gas.point,
-		"octopus-mprn",
-		z2m.Env("OCTOPUS_MPRN", ""),
-		"gas meter point number, to record the gas used; also needs OCTOPUS_API_KEY (OCTOPUS_MPRN)",
+		"octopus-gas-mprn",
+		z2m.Env("OCTOPUS_GAS_MPRN", ""),
+		"gas meter point number, to record the gas used; also needs OCTOPUS_API_KEY (OCTOPUS_GAS_MPRN)",
 	)
 
 	cmd.Flags().StringVar(
 		&r.gas.serial,
-		"octopus-serial",
+		"octopus-gas-serial",
 		z2m.Env("OCTOPUS_GAS_SERIAL", ""),
 		"gas meter serial number (OCTOPUS_GAS_SERIAL)",
 	)
 
 	cmd.Flags().StringVar(
 		&r.gas.units,
-		"gas-units",
+		"octopus-gas-units",
 		z2m.Env("OCTOPUS_GAS_UNITS", string(octopus.M3)),
 		"what the gas meter reports: m3 for SMETS2 or kwh for SMETS1 (OCTOPUS_GAS_UNITS)",
 	)
 
-	cmd.Flags().Float64Var(&r.gas.cv, "gas-cv", 39.5, "calorific value in MJ/m³ from the gas bill, used when the meter reports m3")
+	cmd.Flags().Float64Var(&r.gas.cv, "octopus-gas-cv", 39.5, "calorific value in MJ/m³ from the gas bill, used when the meter reports m3")
 
 	cmd.Flags().StringVar(
 		&r.power.point,
-		"octopus-mpan",
+		"octopus-electricity-mpan",
 		z2m.Env("OCTOPUS_ELECTRICITY_MPAN", ""),
 		"electricity meter point number, to record the electricity used; also needs OCTOPUS_API_KEY (OCTOPUS_ELECTRICITY_MPAN)",
 	)
