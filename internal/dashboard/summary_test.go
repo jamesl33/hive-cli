@@ -40,3 +40,20 @@ func TestSummarize(t *testing.T) {
 	assert.Equal(t, 2*time.Hour, got.BoilerOn)
 	assert.Equal(t, 2, got.BoilerRuns)
 }
+
+func TestSummarizeSumsFuelsInThePeriod(t *testing.T) {
+	from := day1.Truncate(24 * time.Hour)
+	to := from.Add(4 * time.Hour)
+
+	samples := []Sample{
+		sample("gas", Gas, from.Add(-30*time.Minute), 9), // Before the period
+		sample("gas", Gas, from, 0.5),
+		sample("gas", Gas, from.Add(30*time.Minute), 0.5), // A repeat is a separate half hour
+		sample("electricity", Electricity, from.Add(time.Hour), 0.25),
+		sample("gas", Gas, to.Add(time.Hour), 9), // After the period
+	}
+
+	got := Summarize(samples, "outdoors", from, to)
+
+	assert.Equal(t, map[Metric]float64{Gas: 1, Electricity: 0.25}, got.Fuels)
+}

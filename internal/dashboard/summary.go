@@ -48,6 +48,9 @@ type Summary struct {
 
 	// BoilerRuns is how many times the boiler started.
 	BoilerRuns int
+
+	// Fuels is the kWh of each fuel used in the period, for the fuels which have any readings.
+	Fuels map[Metric]float64
 }
 
 // Summarize works out the temperature of each device, the spread between the rooms and the boiler use
@@ -103,6 +106,9 @@ type tally struct {
 
 	// boilerRuns is how many times the boiler has started.
 	boilerRuns int
+
+	// fuels is the kWh of each fuel used so far.
+	fuels map[Metric]float64
 }
 
 // newTally returns a tally of the period which starts at from.
@@ -114,6 +120,7 @@ func newTally(outdoors string, from time.Time) *tally {
 		stats:    make(map[string]*DeviceSummary),
 		current:  make(map[string]float64),
 		boiler:   BoilerOff,
+		fuels:    make(map[Metric]float64),
 	}
 
 	return &t
@@ -121,6 +128,15 @@ func newTally(outdoors string, from time.Time) *tally {
 
 // apply adds up the time before the sample, then takes in what the sample says.
 func (t *tally) apply(s Sample) {
+	if isUsage(s.Metric) {
+		// Use is a total for the half hour, not a state, so it takes no time and counts only inside the period.
+		if !s.At.Before(t.from) {
+			t.fuels[s.Metric] += s.Value
+		}
+
+		return
+	}
+
 	t.account(s.At)
 
 	switch s.Metric {
@@ -191,7 +207,7 @@ func (t *tally) record(device string, v, secs float64) {
 
 // summary returns what has been added up.
 func (t *tally) summary() Summary {
-	s := Summary{SpreadMax: t.spreadMax, BoilerOn: t.boilerOn, BoilerRuns: t.boilerRuns}
+	s := Summary{SpreadMax: t.spreadMax, BoilerOn: t.boilerOn, BoilerRuns: t.boilerRuns, Fuels: t.fuels}
 
 	if t.spreadSpan > 0 {
 		s.SpreadMean = t.spreadSum / t.spreadSpan

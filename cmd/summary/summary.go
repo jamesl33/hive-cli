@@ -217,4 +217,13 @@ func writeFooter(w io.Writer, sum dashboard.Summary) {
 
 	fmt.Fprintf(w, "\n%s %s %s\n", dim.Render("spread"), spread, spreadDetail)
 	fmt.Fprintf(w, "%s %s %s\n", dim.Render("boiler"), boilerOn, boilerDetail)
+
+	for _, fuel := range []dashboard.Metric{dashboard.Gas, dashboard.Electricity} {
+		kwh, ok := sum.Fuels[fuel]
+		if !ok {
+			continue
+		}
+
+		fmt.Fprintf(w, "%s %s %s\n", dim.Render(string(fuel)), bold.Render(fmt.Sprintf("%.1f", kwh)), dim.Render("kWh"))
+	}
 }
