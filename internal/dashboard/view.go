@@ -366,9 +366,18 @@ func (s *Store) usage() []meter {
 	var meters []meter
 
 	for _, metric := range slices.Sorted(maps.Keys(usageColors)) {
-		for _, device := range slices.Sorted(maps.Keys(s.Series[metric])) {
-			meters = append(meters, meter{metric: metric, device: device, series: s.Series[metric][device]})
-		}
+		meters = append(meters, s.meters(metric)...)
+	}
+
+	return meters
+}
+
+// meters returns the readings of each device of the metric, in the order of their name.
+func (s *Store) meters(metric Metric) []meter {
+	var meters []meter
+
+	for _, device := range slices.Sorted(maps.Keys(s.Series[metric])) {
+		meters = append(meters, meter{metric: metric, device: device, series: s.Series[metric][device]})
 	}
 
 	return meters
@@ -388,7 +397,7 @@ func (s Series) sum(from time.Time) float64 {
 }
 
 // usagePlot returns the line of the readings from the time to now, held for their half hour so it
-// stops at the end of the newest, with at most 2*w points.
+// stops at the end of the newest, with at most 2*w points. The series must not be empty.
 func usagePlot(series Series, from, now time.Time, w int, style lipgloss.Style) plot {
 	last := series[len(series)-1]
 	points := append(stepped(series), Point{At: last.At.Add(usageStep), Value: last.Value})
