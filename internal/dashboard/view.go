@@ -783,11 +783,11 @@ func (s *Store) batteries() []string {
 	return lines
 }
 
-// boilerRows draws the boiler state aligned under a chart, with a key.
-func (s *Store) boilerRows(c chart, from, to time.Time) []string {
-	strip := Strip(s.Series[Boiler][s.Receiver.Name], from, to, c.width)
+// boilerRows draws the boiler state across the width, with a key.
+func (s *Store) boilerRows(width int, from, to time.Time) []string {
+	strip := Strip(s.Series[Boiler][s.Receiver.Name], from, to, width)
 
 	key := fmt.Sprintf("Boiler  %s on  %s idle  %s off", boilerOn, boilerIdle, boilerOff)
 
-	return []string{key, strings.Repeat(" ", c.left) + renderStrip(strip)}
+	return []string{key, renderStrip(strip)}
 }

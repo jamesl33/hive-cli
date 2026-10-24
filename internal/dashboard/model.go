@@ -382,7 +382,7 @@ func (m Model) draw(now time.Time) string {
 	}
 
 	boiler := formatOn(boilerOnTime(m.store.Series[Boiler][m.store.Receiver.Name], from, now), windows[m.window])
-	rows = append(rows, box("Boiler "+boiler, "", strings.Join(m.store.boilerRows(temp, from, now), "\n"), m.width))
+	rows = append(rows, box("Boiler "+boiler, "", strings.Join(m.store.boilerRows(m.width-2, from, now), "\n"), m.width))
 
 	if len(batteries) > 0 {
 		rows = append(rows, box("Battery", "", strings.Join(batteries, "\n"), m.width))
