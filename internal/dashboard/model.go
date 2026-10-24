@@ -26,6 +26,9 @@ const (
 	// minWidth is the narrowest terminal the dashboard can draw in.
 	minWidth = 50
 
+	// minChartHeight is the shortest temperature or humidity chart which is drawn.
+	minChartHeight = 3
+
 	// minHeight is the shortest terminal the dashboard can draw in.
 	minHeight = 18
 )
@@ -48,11 +51,24 @@ var windows = []time.Duration{
 	12 * 30 * 24 * time.Hour,
 }
 
+// page is a screen of the dashboard, cycled with the tab and shift+tab keys.
+type page int
+
+const (
+	pageClimate page = iota
+	pageFuels
+)
+
+// pageNames are the names of the pages, in order.
+var pageNames = []string{"Climate", "Fuels"}
+
 // defaultWindow is the position in windows shown at start.
 const defaultWindow = 4
 
 // helpText lists the keys.
-const helpText = `w      next time window
+const helpText = `tab    next page
+shift+tab previous page
+w      next time window
 W      previous time window
 1-8    show or hide a device on the charts
 o      show or hide the outdoor sensor on the charts
@@ -84,6 +100,7 @@ type tickMsg time.Time
 type viewKey struct {
 	version       uint64
 	window        int
+	page          page
 	width, height int
 	help          bool
 	paused        bool
@@ -107,6 +124,7 @@ type Model struct {
 	width     int
 	height    int
 	window    int // position in windows
+	page      page
 	connected bool
 	help      bool
 	err       error
@@ -180,6 +198,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		case "q", "ctrl+c":
 			return m, tea.Quit
+		case "tab":
+			m.page = (m.page + 1) % page(len(pageNames))
+		case "shift+tab":
+			m.page = (m.page + page(len(pageNames)) - 1) % page(len(pageNames))
 		case "?":
 			m.help = !m.help
 		case "o":
@@ -286,6 +308,7 @@ func (m Model) viewKey(now time.Time) viewKey {
 	return viewKey{
 		version:   version,
 		window:    m.window,
+		page:      m.page,
 		width:     m.width,
 		height:    m.height,
 		help:      m.help,
@@ -323,62 +346,84 @@ func (m Model) draw(now time.Time) string {
 		return box("Help", "", helpText, m.width)
 	}
 
-	devices := "Devices"
-
-	if m.paused {
-		devices += lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Render("  paused")
-	}
-
-	if !m.connected {
-		devices += lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Render("  reconnecting to broker...")
-	}
-
 	if len(m.store.Order) == 0 {
 		msg := "Waiting for devices to report; sensors only send when their reading changes."
 
-		return box(devices, "", msg, m.width)
+		return box(m.title("Devices"), "", msg, m.width)
 	}
 
+	if m.page == pageFuels {
+		return strings.Join(m.drawFuels(now, from), "\n")
+	}
+
+	return strings.Join(m.drawClimate(now, from), "\n")
+}
+
+// title returns the title of the box at the top of a page: the name, the state of the display, and the
+// pages with the current one highlighted.
+func (m Model) title(name string) string {
+	if m.paused {
+		name += lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Render("  paused")
+	}
+
+	if !m.connected {
+		name += lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Render("  reconnecting to broker...")
+	}
+
+	return name + m.tabs()
+}
+
+// tabs lists the pages, with the current one highlighted.
+func (m Model) tabs() string {
+	var b strings.Builder
+
+	for i, name := range pageNames {
+		style := lipgloss.NewStyle().Foreground(staleColor)
+		if page(i) == m.page {
+			style = lipgloss.NewStyle().Bold(true).Reverse(true)
+		}
+
+		b.WriteString("  " + style.Render(" "+name+" "))
+	}
+
+	return b.String()
+}
+
+// drawClimate draws the rows of the climate page: the temperature chart above the humidity chart, with
+// the boiler and batteries below.
+func (m Model) drawClimate(now, from time.Time) []string {
 	batteries := m.store.batteries()
-	rows := []string{box(devices, formatWindow(windows[m.window]), m.store.legend(now, m.hidden), m.width)}
+	rows := []string{box(m.title("Devices"), formatWindow(windows[m.window]), m.store.legend(now, m.hidden), m.width)}
 
 	// Besides the charts there are the legend row, the two boiler rows, the battery rows and the
-	// borders of each box.
+	// borders of each box. When the charts would get too short, the humidity and then the batteries
+	// are left off.
 	hasHumidity := len(m.store.Series[Humidity]) > 0
-	hasUsage := m.store.hasUsage()
-	boxes := 3 + 2*boolInt(hasUsage) + boolInt(len(batteries) > 0)
-	tempH, usageH := m.height-1-2*boxes-2-len(batteries)-boolInt(hasUsage), 0
+	h := m.climateHeight(hasHumidity, len(batteries))
 
-	if hasUsage {
-		tempH, usageH = tempH/2, tempH-tempH/2
+	if h < minChartHeight*(1+boolInt(hasHumidity)) {
+		hasHumidity = false
+		h = m.climateHeight(false, len(batteries))
 	}
 
-	hide := m.hidden
+	if h < minChartHeight {
+		batteries = nil
+		h = m.climateHeight(false, 0)
+	}
 
-	// Humidity shares the top row with the temperature, half each
-	tempW, humW := m.width, 0
+	// Humidity shares the height with the temperature, half each
+	tempH, humH := h, 0
 	if hasHumidity {
-		humW = m.width / 2
-		tempW = m.width - humW
+		humH = h / 2
+		tempH = h - humH
 	}
 
-	temp := m.store.renderChart(Temperature, hide, tempW-2, tempH, from, now)
-	top := []string{box("Temperature °C", "", temp.view, tempW)}
+	temp := m.store.renderChart(Temperature, m.hidden, m.width-2, tempH, from, now)
+	rows = append(rows, box("Temperature °C", "", temp.view, m.width))
 
 	if hasHumidity {
-		humidity := m.store.renderChart(Humidity, hide, humW-2, tempH, from, now)
-		top = append(top, box("Humidity %", "", humidity.view, humW))
-	}
-
-	rows = append(rows, lipgloss.JoinHorizontal(lipgloss.Top, top...))
-
-	if hasUsage {
-		rows = append(rows, box("Fuels", formatWindow(windows[m.window]), m.store.fuels(from, hide), m.width))
-	}
-
-	if hasUsage && usageH >= minUsageHeight {
-		usage := m.store.renderUsage(m.width-2, usageH, from, now, hide)
-		rows = append(rows, box("Usage kWh/30m", m.store.usageCorner(now), usage, m.width))
+		humidity := m.store.renderChart(Humidity, m.hidden, m.width-2, humH, from, now)
+		rows = append(rows, box("Humidity %", "", humidity.view, m.width))
 	}
 
 	boiler := formatOn(boilerOnTime(m.store.Series[Boiler][m.store.Receiver.Name], from, now), windows[m.window])
@@ -388,13 +433,42 @@ func (m Model) draw(now time.Time) string {
 		rows = append(rows, box("Battery", "", strings.Join(batteries, "\n"), m.width))
 	}
 
-	return strings.Join(rows, "\n")
+	return rows
+}
+
+// climateHeight returns the height left for the charts of the climate page, given the humidity chart and
+// the rows of batteries which are drawn.
+func (m Model) climateHeight(humidity bool, batteries int) int {
+	boxes := 3 + boolInt(humidity) + boolInt(batteries > 0)
+
+	return m.height - 2*boxes - 3 - batteries
+}
+
+// drawFuels draws the rows of the fuels page: the energy used by each fuel, and the usage chart.
+func (m Model) drawFuels(now, from time.Time) []string {
+	if !m.store.hasUsage() {
+		return []string{box(m.title("Fuels"), "", "No energy use recorded.", m.width)}
+	}
+
+	// Besides the chart there are the fuels row and the borders of each box.
+	h := m.height - 2*2 - 1
+
+	rows := []string{box(m.title("Fuels"), formatWindow(windows[m.window]), m.store.fuels(from, m.hidden), m.width)}
+
+	if h < minUsageHeight {
+		return rows
+	}
+
+	usage := m.store.renderUsage(m.width-2, h, from, now, m.hidden)
+
+	return append(rows, box("Usage kWh/30m", m.store.usageCorner(now), usage, m.width))
 }
 
 // box draws the body inside a border of the width, with the title set into the top edge, and the
 // corner at its right end if there is room.
 func box(title, corner, body string, width int) string {
 	inner := width - 2
+	title = lipgloss.NewStyle().MaxWidth(max(inner-3, 0)).Render(title)
 	fill := inner - lipgloss.Width(title) - 3
 
 	if corner != "" && fill >= lipgloss.Width(corner)+3 {

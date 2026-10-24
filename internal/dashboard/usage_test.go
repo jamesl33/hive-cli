@@ -98,18 +98,35 @@ func TestViewShowsUsage(t *testing.T) {
 
 	m := New(t.Context(), feed{}, store)
 	next, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	next, _ = next.Update(tea.KeyMsg{Type: tea.KeyTab})
 
 	view := next.View()
 	t.Log("\n" + view)
 
 	assert.LessOrEqual(t, strings.Count(view, "\n")+1, 40)
 
-	for _, want := range []string{"Usage kWh/30m", "behind", "hall", "Temperature"} {
+	for _, want := range []string{"Usage kWh/30m", "behind"} {
 		assert.Contains(t, view, want)
 	}
+
+	assert.NotContains(t, view, "Temperature")
+	assert.NotContains(t, view, "hall")
 }
 
-func TestViewPutsHumidityBesideTemperature(t *testing.T) {
+func TestTabCyclesPages(t *testing.T) {
+	m := New(t.Context(), feed{}, NewStore(receiver))
+
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyTab})
+	assert.Equal(t, pageFuels, next.(Model).page)
+
+	next, _ = next.Update(tea.KeyMsg{Type: tea.KeyTab})
+	assert.Equal(t, pageClimate, next.(Model).page)
+
+	next, _ = next.Update(tea.KeyMsg{Type: tea.KeyShiftTab})
+	assert.Equal(t, pageFuels, next.(Model).page)
+}
+
+func TestViewPutsHumidityBelowTemperature(t *testing.T) {
 	store := NewStore(receiver)
 	now := time.Now()
 
@@ -125,17 +142,14 @@ func TestViewPutsHumidityBesideTemperature(t *testing.T) {
 
 	assert.LessOrEqual(t, strings.Count(view, "\n")+1, 40)
 
-	var shared string
-
+	assert.Greater(t, strings.Index(view, "Humidity"), strings.Index(view, "Temperature"))
 	for line := range strings.SplitSeq(view, "\n") {
-		if strings.Contains(line, "Humidity") {
-			shared = line
-		}
+		assert.Equal(t, 100, lipgloss.Width(line))
+		assert.False(t, strings.Contains(line, "Humidity") && strings.Contains(line, "Temperature"))
 	}
 
-	assert.Contains(t, shared, "Temperature")
-	assert.Equal(t, 100, lipgloss.Width(shared))
-	assert.Greater(t, strings.Index(view, "Usage kWh/30m"), strings.Index(view, "Humidity"))
+	assert.Greater(t, strings.Index(view, "Boiler"), strings.Index(view, "Humidity"))
+	assert.NotContains(t, view, "Usage")
 }
 
 func TestViewFitsUsageAtMinHeight(t *testing.T) {
@@ -147,9 +161,9 @@ func TestViewFitsUsageAtMinHeight(t *testing.T) {
 	store.add(Sample{Device: "gas", Metric: Gas, At: now.Add(-30 * time.Hour), Value: 0.5})
 
 	m := New(t.Context(), feed{}, store)
-	// The fuels box takes three rows, so the usage chart needs that many more than the minimum
-	height := minHeight + 3
-	next, _ := m.Update(tea.WindowSizeMsg{Width: minWidth, Height: height})
+	next, _ := m.Update(tea.WindowSizeMsg{Width: minWidth, Height: minHeight})
+	next, _ = next.Update(tea.KeyMsg{Type: tea.KeyTab})
+	height := minHeight
 
 	view := next.View()
 	require.NotEmpty(t, view)
@@ -190,4 +204,50 @@ func TestDrawPlotsAlternatesOverlappingLines(t *testing.T) {
 	}
 
 	assert.Len(t, colors, 2)
+}
+
+func TestClimateFitsMinSizeWithBatteries(t *testing.T) {
+	store := NewStore(receiver)
+	now := time.Now()
+
+	for _, device := range []string{"a", "b", "c", "d", "e", "f"} {
+		store.add(Sample{Device: device, Metric: Temperature, At: now, Value: 18})
+		store.add(Sample{Device: device, Metric: Humidity, At: now, Value: 55})
+		store.add(Sample{Device: device, Metric: Battery, At: now, Value: 10})
+	}
+
+	m := New(t.Context(), feed{}, store)
+	m.connected, m.paused = false, true
+
+	next, _ := m.Update(tea.WindowSizeMsg{Width: minWidth, Height: minHeight})
+
+	view := next.View()
+	t.Log("\n" + view)
+
+	assert.LessOrEqual(t, strings.Count(view, "\n")+1, minHeight)
+
+	for line := range strings.SplitSeq(view, "\n") {
+		assert.Equal(t, minWidth, lipgloss.Width(line), line)
+	}
+}
+
+func TestFuelsWithoutUsage(t *testing.T) {
+	store := NewStore(receiver)
+	store.add(Sample{Device: "hall", Metric: Temperature, At: time.Now(), Value: 18})
+
+	next, _ := New(t.Context(), feed{}, store).Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	next, _ = next.Update(tea.KeyMsg{Type: tea.KeyTab})
+
+	assert.Contains(t, next.View(), "No energy use recorded.")
+}
+
+func TestTabRedrawsCachedView(t *testing.T) {
+	store := NewStore(receiver)
+	store.add(Sample{Device: "hall", Metric: Temperature, At: time.Now(), Value: 18})
+
+	next, _ := New(t.Context(), feed{}, store).Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	assert.Contains(t, next.View(), "Temperature")
+
+	next, _ = next.Update(tea.KeyMsg{Type: tea.KeyTab})
+	assert.NotContains(t, next.View(), "Temperature")
 }
