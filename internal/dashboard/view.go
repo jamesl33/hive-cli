@@ -429,7 +429,7 @@ func (s *Store) renderUsage(w, h int, from, now time.Time, hide map[string]bool)
 	var plots []plot
 
 	for _, u := range s.usage() {
-		series := visible(u.series, from)
+		series := current(u.series, from)
 		if len(series) == 0 || hide[u.device] {
 			continue
 		}
@@ -552,6 +552,14 @@ func visible(s Series, from time.Time) Series {
 	i := sort.Search(len(s), func(i int) bool { return s[i].At.After(from) })
 
 	return s[max(i-1, 0):]
+}
+
+// current returns the readings of energy use whose half hour ends after the time. Unlike visible, it
+// keeps no reading from before, as a reading does not hold past its half hour.
+func current(s Series, from time.Time) Series {
+	i := sort.Search(len(s), func(i int) bool { return s[i].At.Add(usageStep).After(from) })
+
+	return s[i:]
 }
 
 // clamp moves a leading point which lies before the time onto it, on the line to the next point, so

@@ -46,6 +46,21 @@ func TestFuelsSumsTheWindow(t *testing.T) {
 	assert.Contains(t, s.fuels(now.Add(-4*time.Hour), nil), "gas 10.0 kWh")
 }
 
+func TestUsageOutsideWindowIsBlank(t *testing.T) {
+	now := time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
+
+	s := NewStore(receiver)
+	s.add(Sample{Device: "gas", Metric: Gas, At: now.Add(-25 * time.Hour), Value: 0.5})
+
+	empty := NewStore(receiver)
+	empty.add(Sample{Device: "gas", Metric: Gas, At: now.Add(-25 * time.Hour), Value: 0})
+
+	from := now.Add(-time.Hour)
+
+	assert.Equal(t, empty.renderUsage(98, 6, from, now, nil), s.renderUsage(98, 6, from, now, nil))
+	assert.Empty(t, current(s.Series[Gas]["gas"], from))
+}
+
 func TestFuelKeysHideFuels(t *testing.T) {
 	store := NewStore(receiver)
 	now := time.Now()
