@@ -184,13 +184,21 @@ func (l *Log) Add(s Sample) {
 	k := key{device: s.Device, metric: s.Metric}
 	steps := toSteps(s)
 
+	// Energy used is not a state: a repeated value is another half hour, and is kept, and not carried
+	// into the next day, as each half hour is recorded
+	_, usage := usageColors[s.Metric]
+
 	old, ok := l.last[k]
-	if ok && old == steps {
+	if ok && old == steps && !usage {
 		return
 	}
 
 	l.roll(s.At)
-	l.last[k] = steps
+
+	if !usage {
+		l.last[k] = steps
+	}
+
 	l.pending = appendRecord(l.pending, record{at: s.At, key: k, steps: steps})
 }
 

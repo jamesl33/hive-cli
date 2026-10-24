@@ -103,6 +103,15 @@ func latestUsage(dir string, m dashboard.Metric) (time.Time, error) {
 	return latest, nil
 }
 
+// latest returns the later of the two times.
+func latest(a, b time.Time) time.Time {
+	if b.After(a) {
+		return b
+	}
+
+	return a
+}
+
 // recordUsage adds the half hours after the time to the log, returning the start of the newest.
 func recordUsage(ctx context.Context, c *octopus.Client, log *dashboard.Log, after time.Time) (time.Time, error) {
 	from := after
@@ -116,6 +125,7 @@ func recordUsage(ctx context.Context, c *octopus.Client, log *dashboard.Log, aft
 	}
 
 	m := metric(c.Fuel)
+	newest := after
 
 	for _, i := range intervals {
 		if !i.Start.After(after) {
@@ -124,8 +134,8 @@ func recordUsage(ctx context.Context, c *octopus.Client, log *dashboard.Log, aft
 
 		log.Add(dashboard.Sample{Device: string(m), Metric: m, At: i.Start, Value: i.KWh})
 
-		after = i.Start
+		newest = latest(newest, i.Start)
 	}
 
-	return after, nil
+	return newest, nil
 }

@@ -45,17 +45,51 @@ func TestRecordUsage(t *testing.T) {
 
 	require.NoError(t, log.Flush(time.Now()))
 
-	// A repeated value is dropped, so the third half hour holds the second's
+	// A repeated value is another half hour, so it is kept
 	samples, err := dashboard.Load(dir, start)
 	require.NoError(t, err)
-	require.Len(t, samples, 2)
+	require.Len(t, samples, 3)
 	assert.Equal(t, dashboard.Gas, samples[0].Metric)
 	assert.Equal(t, 0.25, samples[0].Value)
 	assert.Equal(t, 0.5, samples[1].Value)
+	assert.Equal(t, 0.5, samples[2].Value)
 
 	latest, err := latestUsage(dir, dashboard.Gas)
 	require.NoError(t, err)
-	assert.Equal(t, start.Add(30*time.Minute), latest)
+	assert.Equal(t, start.Add(time.Hour), latest)
+}
+
+func TestRecordUsageOutOfOrder(t *testing.T) {
+	start := time.Now().UTC().Truncate(30 * time.Minute).Add(-3 * time.Hour)
+
+	// The API does not always return readings oldest first, and repeats are readings too
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprintf(w, `{"results":[`+
+			`{"consumption":0.5,"interval_start":%q},`+
+			`{"consumption":0.25,"interval_start":%q},`+
+			`{"consumption":0.5,"interval_start":%q}]}`,
+			start.Add(time.Hour).Format(time.RFC3339),
+			start.Format(time.RFC3339),
+			start.Add(30*time.Minute).Format(time.RFC3339))
+	}))
+	defer srv.Close()
+
+	dir := t.TempDir()
+
+	log, err := dashboard.OpenLog(dir)
+	require.NoError(t, err)
+
+	c := octopus.Client{BaseURL: srv.URL, Key: "k", Fuel: octopus.Gas, Point: "1", Serial: "2", Units: octopus.KWh}
+
+	after, err := recordUsage(t.Context(), &c, log, time.Time{})
+	require.NoError(t, err)
+	assert.Equal(t, start.Add(time.Hour), after)
+
+	require.NoError(t, log.Flush(time.Now()))
+
+	samples, err := dashboard.Load(dir, start)
+	require.NoError(t, err)
+	require.Len(t, samples, 3)
 }
 
 func TestMeterOptionsClient(t *testing.T) {
