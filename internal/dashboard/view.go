@@ -378,14 +378,12 @@ func (s *Store) meters(metric Metric) []meter {
 	return meters
 }
 
-// sum returns the energy used in the readings after the time.
+// sum returns the energy used in the readings which the chart draws, the ones ending after the time.
 func (s Series) sum(from time.Time) float64 {
 	total := 0.0
 
-	for _, p := range s {
-		if p.At.After(from) {
-			total += p.Value
-		}
+	for _, p := range current(s, from) {
+		total += p.Value
 	}
 
 	return total

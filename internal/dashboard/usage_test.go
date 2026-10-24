@@ -44,6 +44,8 @@ func TestFuelsSumsTheWindow(t *testing.T) {
 
 	assert.Contains(t, s.fuels(now.Add(-90*time.Minute), nil), "gas 1.0 kWh")
 	assert.Contains(t, s.fuels(now.Add(-4*time.Hour), nil), "gas 10.0 kWh")
+	// A reading which started before the window but ends inside it is drawn, so it is counted.
+	assert.Contains(t, s.fuels(now.Add(-50*time.Minute), nil), "gas 1.0 kWh")
 }
 
 func TestUsageOutsideWindowIsBlank(t *testing.T) {
