@@ -41,6 +41,9 @@ var windows = []time.Duration{
 	6 * time.Hour,
 	12 * time.Hour,
 	24 * time.Hour,
+	7 * 24 * time.Hour,
+	14 * 24 * time.Hour,
+	30 * 24 * time.Hour,
 }
 
 // defaultWindow is the position in windows shown at start.
@@ -431,6 +434,10 @@ func boolInt(b bool) int {
 func formatWindow(d time.Duration) string {
 	if d < time.Hour {
 		return fmt.Sprintf("%dm", int(d.Minutes()))
+	}
+
+	if d >= 48*time.Hour {
+		return fmt.Sprintf("%dd", int(d.Hours())/24)
 	}
 
 	return fmt.Sprintf("%dh", int(d.Hours()))

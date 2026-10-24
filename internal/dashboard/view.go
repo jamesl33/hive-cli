@@ -447,7 +447,7 @@ func (s *Store) renderUsage(w, h int, from, now time.Time, hide map[string]bool)
 			timeserieslinechart.WithYLabelFormatter(func(_ int, v float64) string { return fmt.Sprintf("%.1f", v) }),
 		)
 
-		c.XLabelFormatter = tickLabels(24*time.Hour, now.Sub(from)/time.Duration(c.GraphWidth()))
+		c.XLabelFormatter = tickLabels(tickStep(now.Sub(from)), now.Sub(from)/time.Duration(c.GraphWidth()))
 
 		return c
 	}
@@ -461,6 +461,7 @@ func (s *Store) renderUsage(w, h int, from, now time.Time, hide map[string]bool)
 var tickSteps = []time.Duration{
 	10 * time.Second, 15 * time.Second, 30 * time.Second, time.Minute, 5 * time.Minute, 10 * time.Minute,
 	15 * time.Minute, 30 * time.Minute, time.Hour, 2 * time.Hour, 4 * time.Hour, 6 * time.Hour,
+	24 * time.Hour, 48 * time.Hour, 7 * 24 * time.Hour,
 }
 
 // maxTicks is the most labels on a time axis.

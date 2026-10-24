@@ -251,6 +251,10 @@ func TestWindowCycles(t *testing.T) {
 
 	assert.Equal(t, "15m", formatWindow(15*time.Minute))
 	assert.Equal(t, "3h", formatWindow(3*time.Hour))
+	assert.Equal(t, "24h", formatWindow(24*time.Hour))
+	assert.Equal(t, "30d", formatWindow(30*24*time.Hour))
+	assert.Equal(t, 48*time.Hour, tickStep(7*24*time.Hour))
+	assert.Equal(t, 7*24*time.Hour, tickStep(30*24*time.Hour))
 }
 
 func TestViewWideWindow(t *testing.T) {
