@@ -32,7 +32,7 @@ func TestRecordUsage(t *testing.T) {
 	log, err := dashboard.OpenLog(dir)
 	require.NoError(t, err)
 
-	c := octopus.Client{BaseURL: srv.URL, Key: "k", Fuel: octopus.Gas, Point: "1", Serial: "2", Units: octopus.KWh}
+	c := octopus.Client{BaseURL: srv.URL, Key: "k", Fuel: octopus.FuelGas, Point: "1", Serial: "2", Units: octopus.UnitsKWh}
 
 	after, err := recordUsage(t.Context(), &c, log, time.Time{})
 	require.NoError(t, err)
@@ -79,7 +79,7 @@ func TestRecordUsageOutOfOrder(t *testing.T) {
 	log, err := dashboard.OpenLog(dir)
 	require.NoError(t, err)
 
-	c := octopus.Client{BaseURL: srv.URL, Key: "k", Fuel: octopus.Gas, Point: "1", Serial: "2", Units: octopus.KWh}
+	c := octopus.Client{BaseURL: srv.URL, Key: "k", Fuel: octopus.FuelGas, Point: "1", Serial: "2", Units: octopus.UnitsKWh}
 
 	after, err := recordUsage(t.Context(), &c, log, time.Time{})
 	require.NoError(t, err)
@@ -93,21 +93,21 @@ func TestRecordUsageOutOfOrder(t *testing.T) {
 }
 
 func TestMeterOptionsClient(t *testing.T) {
-	_, err := meterOptions{fuel: octopus.Gas, point: "1"}.client("")
+	_, err := meterOptions{fuel: octopus.FuelGas, point: "1"}.client("")
 	assert.Error(t, err)
 
-	c, err := meterOptions{fuel: octopus.Gas}.client("")
+	c, err := meterOptions{fuel: octopus.FuelGas}.client("")
 	assert.NoError(t, err)
 	assert.Nil(t, c)
 
-	c, err = meterOptions{fuel: octopus.Gas, point: "1", serial: "2"}.client("k")
+	c, err = meterOptions{fuel: octopus.FuelGas, point: "1", serial: "2"}.client("k")
 	require.NoError(t, err)
 	assert.Equal(t, "1", c.Point)
-	assert.Equal(t, octopus.M3, c.Units)
+	assert.Equal(t, octopus.UnitsM3, c.Units)
 
-	c, err = meterOptions{fuel: octopus.Electricity, point: "3", serial: "4"}.client("k")
+	c, err = meterOptions{fuel: octopus.FuelElectricity, point: "3", serial: "4"}.client("k")
 	require.NoError(t, err)
-	assert.Equal(t, octopus.Electricity, c.Fuel)
+	assert.Equal(t, octopus.FuelElectricity, c.Fuel)
 }
 
 func TestRecordUsageElectricity(t *testing.T) {
@@ -124,7 +124,7 @@ func TestRecordUsageElectricity(t *testing.T) {
 	log, err := dashboard.OpenLog(dir)
 	require.NoError(t, err)
 
-	c := octopus.Client{BaseURL: srv.URL, Key: "k", Fuel: octopus.Electricity, Point: "1", Serial: "2"}
+	c := octopus.Client{BaseURL: srv.URL, Key: "k", Fuel: octopus.FuelElectricity, Point: "1", Serial: "2"}
 
 	_, err = recordUsage(t.Context(), &c, log, time.Time{})
 	require.NoError(t, err)

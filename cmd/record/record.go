@@ -32,8 +32,8 @@ type Record struct {
 func NewRecord(options *z2m.Options) *cobra.Command {
 	r := Record{
 		options: options,
-		gas:     meterOptions{fuel: octopus.Gas},
-		power:   meterOptions{fuel: octopus.Electricity},
+		gas:     meterOptions{fuel: octopus.FuelGas},
+		power:   meterOptions{fuel: octopus.FuelElectricity},
 	}
 
 	cmd := cobra.Command{

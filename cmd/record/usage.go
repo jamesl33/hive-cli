@@ -52,7 +52,7 @@ func (o meterOptions) client(key string) (*octopus.Client, error) {
 		Fuel:           o.fuel,
 		Point:          o.point,
 		Serial:         o.serial,
-		Units:          octopus.M3,
+		Units:          octopus.UnitsM3,
 		CalorificValue: gasCalorificValue,
 	}
 

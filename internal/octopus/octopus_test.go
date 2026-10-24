@@ -31,7 +31,7 @@ func TestConsumption(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := Client{BaseURL: srv.URL, Key: "sk_test", Fuel: Gas, Point: "123", Serial: "G4", Units: M3, CalorificValue: 39.5}
+	c := Client{BaseURL: srv.URL, Key: "sk_test", Fuel: FuelGas, Point: "123", Serial: "G4", Units: UnitsM3, CalorificValue: 39.5}
 
 	got, err := c.Consumption(t.Context(), time.Date(2026, 10, 24, 0, 0, 0, 0, time.UTC))
 	require.NoError(t, err)
@@ -43,7 +43,7 @@ func TestConsumption(t *testing.T) {
 }
 
 func TestConsumptionKWh(t *testing.T) {
-	c := Client{Fuel: Gas, Units: KWh, CalorificValue: 39.5}
+	c := Client{Fuel: FuelGas, Units: UnitsKWh, CalorificValue: 39.5}
 	assert.Equal(t, 0.75, c.kWh(0.75))
 }
 
@@ -55,7 +55,7 @@ func TestConsumptionElectricity(t *testing.T) {
 	defer srv.Close()
 
 	// Electricity is energy whatever the units say
-	c := Client{BaseURL: srv.URL, Key: "sk_test", Fuel: Electricity, Point: "456", Serial: "E1", Units: M3, CalorificValue: 39.5}
+	c := Client{BaseURL: srv.URL, Key: "sk_test", Fuel: FuelElectricity, Point: "456", Serial: "E1", Units: UnitsM3, CalorificValue: 39.5}
 
 	got, err := c.Consumption(t.Context(), time.Now())
 	require.NoError(t, err)
@@ -69,7 +69,7 @@ func TestConsumptionForeignNextPage(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := Client{BaseURL: srv.URL, Key: "sk_test", Fuel: Gas, Point: "123", Serial: "G4", Units: KWh}
+	c := Client{BaseURL: srv.URL, Key: "sk_test", Fuel: FuelGas, Point: "123", Serial: "G4", Units: UnitsKWh}
 
 	_, err := c.Consumption(t.Context(), time.Now())
 	assert.ErrorContains(t, err, "unexpected next page")
@@ -81,7 +81,7 @@ func TestConsumptionStatus(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := Client{BaseURL: srv.URL, Key: "bad", Fuel: Gas, Point: "123", Serial: "G4", Units: KWh}
+	c := Client{BaseURL: srv.URL, Key: "bad", Fuel: FuelGas, Point: "123", Serial: "G4", Units: UnitsKWh}
 
 	_, err := c.Consumption(t.Context(), time.Now())
 	assert.ErrorContains(t, err, "401")

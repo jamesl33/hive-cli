@@ -30,20 +30,23 @@ const (
 // Fuel is what a meter measures, as named in the API.
 type Fuel string
 
-// Fuels.
 const (
-	Gas         Fuel = "gas"
-	Electricity Fuel = "electricity"
+	// FuelGas is a gas meter.
+	FuelGas Fuel = "gas"
+
+	// FuelElectricity is an electricity meter.
+	FuelElectricity Fuel = "electricity"
 )
 
 // Units is what the meter reports consumption in.
 type Units string
 
-// Units of consumption: SMETS2 gas meters report volume, SMETS1 gas meters energy. Electricity meters
-// always report energy.
 const (
-	M3  Units = "m3"
-	KWh Units = "kwh"
+	// UnitsM3 is volume in cubic metres, which SMETS2 gas meters report.
+	UnitsM3 Units = "m3"
+
+	// UnitsKWh is energy in kilowatt hours, which SMETS1 gas meters and all electricity meters report.
+	UnitsKWh Units = "kwh"
 )
 
 // Interval is the energy used in a half hour.
@@ -79,13 +82,16 @@ type Client struct {
 	HTTP *http.Client
 }
 
+// reading is one half hour of consumption in the response.
+type reading struct {
+	Consumption float64   `json:"consumption"`
+	Start       time.Time `json:"interval_start"`
+}
+
 // page is a page of the response.
 type page struct {
-	Next    string `json:"next"`
-	Results []struct {
-		Consumption float64   `json:"consumption"`
-		Start       time.Time `json:"interval_start"`
-	} `json:"results"`
+	Next    string    `json:"next"`
+	Results []reading `json:"results"`
 }
 
 // Consumption returns the half hours which started at or after from, oldest first.
@@ -135,7 +141,7 @@ func (c *Client) Consumption(ctx context.Context, from time.Time) ([]Interval, e
 
 // kWh returns the energy in a consumption reading.
 func (c *Client) kWh(v float64) float64 {
-	if c.Fuel == Electricity || c.Units == KWh {
+	if c.Fuel == FuelElectricity || c.Units == UnitsKWh {
 		return v
 	}
 
