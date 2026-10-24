@@ -351,10 +351,12 @@ func (m Model) draw(now time.Time) string {
 	// borders of each box.
 	hasHumidity := len(m.store.Series[Humidity]) > 0
 	hasUsage := m.store.hasUsage()
-	boxes := 3 + boolInt(hasUsage) + boolInt(len(batteries) > 0)
-	tempH, usageH := m.height-1-2*boxes-2-len(batteries), 0
+	boxes := 3 + 2*boolInt(hasUsage) + boolInt(len(batteries) > 0)
+	tempH, usageH := m.height-1-2*boxes-2-len(batteries)-boolInt(hasUsage), 0
 
 	if hasUsage {
+		rows = append(rows, box("Fuels", "7d", m.store.fuels(now), m.width))
+
 		tempH, usageH = tempH/2, tempH-tempH/2
 	}
 

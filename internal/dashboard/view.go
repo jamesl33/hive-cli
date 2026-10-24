@@ -251,6 +251,30 @@ func (s *Store) usageCorner(now time.Time) string {
 	return lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Render(formatWindow(behind) + " behind")
 }
 
+// fuels lists each fuel with its colour and the energy used over usageSpan up to the time, in kWh.
+func (s *Store) fuels(now time.Time) string {
+	from := now.Add(-usageSpan)
+
+	var parts []string
+
+	for _, metric := range slices.Sorted(maps.Keys(usageColors)) {
+		for _, device := range slices.Sorted(maps.Keys(s.Series[metric])) {
+			total := 0.0
+
+			for _, p := range s.Series[metric][device] {
+				if p.At.After(from) {
+					total += p.Value
+				}
+			}
+
+			style := lipgloss.NewStyle().Foreground(usageColors[metric])
+			parts = append(parts, style.Render(fmt.Sprintf("● %s %.1f kWh", device, total)))
+		}
+	}
+
+	return strings.Join(parts, "  ")
+}
+
 // renderUsage draws a line for each fuel of the energy used in each half hour over usageSpan up to the
 // time. Each reading is held for its half hour and the line stops at the end of the newest, so a
 // reading which is late leaves a gap before the time.

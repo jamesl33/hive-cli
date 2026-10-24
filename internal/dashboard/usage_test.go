@@ -32,6 +32,17 @@ func TestUsageEndAndCorner(t *testing.T) {
 	assert.Contains(t, s.usageCorner(now), "24h behind")
 }
 
+func TestFuelsSumsTheSpan(t *testing.T) {
+	now := time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
+
+	s := NewStore(receiver)
+	s.add(Sample{Device: "gas", Metric: Gas, At: now.Add(-usageSpan - usageStep), Value: 9})
+	s.add(Sample{Device: "gas", Metric: Gas, At: now.Add(-2 * usageStep), Value: 0.5})
+	s.add(Sample{Device: "gas", Metric: Gas, At: now.Add(-usageStep), Value: 0.5})
+
+	assert.Contains(t, s.fuels(now), "gas 1.0 kWh")
+}
+
 func TestViewShowsUsage(t *testing.T) {
 	store := NewStore(receiver)
 	now := time.Now()
@@ -94,11 +105,14 @@ func TestViewFitsUsageAtMinHeight(t *testing.T) {
 	store.add(Sample{Device: "gas", Metric: Gas, At: now.Add(-30 * time.Hour), Value: 0.5})
 
 	m := New(t.Context(), feed{}, store)
-	next, _ := m.Update(tea.WindowSizeMsg{Width: minWidth, Height: minHeight})
+	// The fuels box takes three rows, so the usage chart needs that many more than the minimum
+	height := minHeight + 3
+	next, _ := m.Update(tea.WindowSizeMsg{Width: minWidth, Height: height})
 
 	view := next.View()
 	require.NotEmpty(t, view)
 
-	assert.LessOrEqual(t, strings.Count(view, "\n")+1, minHeight)
+	assert.LessOrEqual(t, strings.Count(view, "\n")+1, height)
+	assert.Contains(t, view, "Fuels")
 	assert.Contains(t, view, "Usage")
 }
