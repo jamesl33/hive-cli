@@ -1,14 +1,18 @@
 // Package dashboard is a live terminal dashboard of the heating and the temperature sensors.
 package dashboard
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 const (
 	// maxAge is how long samples are kept in memory, which is as far back as the longest window. The
 	// history on disk is kept indefinitely.
 	maxAge = 360 * 24 * time.Hour
 
-	// maxPoints is the most samples kept for a series.
+	// maxPoints is the most samples a series can hold. Going over it is a bug in the sizing, so Append
+	// panics instead of dropping samples.
 	maxPoints = 200000
 )
 
@@ -21,8 +25,9 @@ type Point struct {
 // Series is a sequence of points in chronological order.
 type Series []Point
 
-// Append adds a point, dropping the points which are too old or exceed the limit. The newest point
-// which is too old is kept, as it is the value held from the start of the period.
+// Append adds a point, dropping the points which are too old. The newest point which is too old is
+// kept, as it is the value held from the start of the period. It panics when the series would hold
+// more than maxPoints.
 func (s Series) Append(p Point) Series {
 	s = append(s, p)
 
@@ -31,8 +36,8 @@ func (s Series) Append(p Point) Series {
 		cut++
 	}
 
-	if over := len(s) - cut - maxPoints; over > 0 {
-		cut += over
+	if len(s)-cut > maxPoints {
+		panic(fmt.Sprintf("dashboard: series holds more than %d points", maxPoints))
 	}
 
 	return s[cut:]

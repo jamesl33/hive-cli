@@ -41,18 +41,15 @@ func TestSeriesAppendDropsOld(t *testing.T) {
 	assert.Equal(t, 3.0, s[1].Value)
 }
 
-func TestSeriesAppendCaps(t *testing.T) {
+func TestSeriesAppendPanicsOverTheLimit(t *testing.T) {
 	var s Series
 
-	for i := range maxPoints + 5 {
+	for i := range maxPoints {
 		s = s.Append(Point{At: time.Unix(int64(i), 0), Value: float64(i)})
 	}
 
 	assert.Len(t, s, maxPoints)
-
-	last, ok := s.Last()
-	require.True(t, ok)
-	assert.Equal(t, float64(maxPoints+4), last.Value)
+	assert.Panics(t, func() { s.Append(Point{At: time.Unix(maxPoints, 0)}) })
 }
 
 func TestExtractSensor(t *testing.T) {
