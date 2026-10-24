@@ -34,15 +34,16 @@ func TestUsageEndAndCorner(t *testing.T) {
 	assert.Contains(t, s.usageCorner(now), "24h behind")
 }
 
-func TestFuelsSumsTheSpan(t *testing.T) {
+func TestFuelsSumsTheWindow(t *testing.T) {
 	now := time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
 
 	s := NewStore(receiver)
-	s.add(Sample{Device: "gas", Metric: Gas, At: now.Add(-usageSpan - usageStep), Value: 9})
+	s.add(Sample{Device: "gas", Metric: Gas, At: now.Add(-3 * time.Hour), Value: 9})
 	s.add(Sample{Device: "gas", Metric: Gas, At: now.Add(-2 * usageStep), Value: 0.5})
 	s.add(Sample{Device: "gas", Metric: Gas, At: now.Add(-usageStep), Value: 0.5})
 
-	assert.Contains(t, s.fuels(now, nil), "gas 1.0 kWh")
+	assert.Contains(t, s.fuels(now.Add(-90*time.Minute), nil), "gas 1.0 kWh")
+	assert.Contains(t, s.fuels(now.Add(-4*time.Hour), nil), "gas 10.0 kWh")
 }
 
 func TestFuelKeysHideFuels(t *testing.T) {
@@ -61,7 +62,7 @@ func TestFuelKeysHideFuels(t *testing.T) {
 	assert.True(t, hidden["gas"])
 	assert.False(t, hidden["electricity"])
 	// The chart scales to the fuel which is left: with gas hidden it peaks at electricity's 0.2.
-	assert.Contains(t, m.store.renderUsage(98, 6, now, hidden), "0.2")
+	assert.Contains(t, m.store.renderUsage(98, 6, now.Add(-48*time.Hour), now, hidden), "0.2")
 
 	next, _ = next.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("g")})
 	assert.False(t, next.(Model).hidden["gas"])

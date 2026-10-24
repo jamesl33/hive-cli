@@ -35,9 +35,6 @@ const (
 	// targetColor is the colour of the target line on the temperature chart.
 	targetColor = lipgloss.Color("231")
 
-	// usageSpan is how far back the usage chart goes, whatever the window.
-	usageSpan = 7 * 24 * time.Hour
-
 	// usageStep is the time covered by each reading of energy use.
 	usageStep = 30 * time.Minute
 
@@ -339,11 +336,9 @@ func (s *Store) usageCorner(now time.Time) string {
 // fuelKeys are the keys which show or hide the fuels.
 var fuelKeys = map[Metric]string{Gas: "g", Electricity: "e"}
 
-// fuels lists each fuel with its key, colour and the energy used over usageSpan up to the time, in kWh;
-// one hidden from the usage chart is struck through.
-func (s *Store) fuels(now time.Time, hide map[string]bool) string {
-	from := now.Add(-usageSpan)
-
+// fuels lists each fuel with its key, colour and the energy used after the time, in kWh; one hidden from
+// the usage chart is struck through.
+func (s *Store) fuels(from time.Time, hide map[string]bool) string {
 	var parts []string
 
 	for _, u := range s.usage() {
@@ -427,12 +422,10 @@ func (s Series) peak() float64 {
 	return hi
 }
 
-// renderUsage draws a line for each fuel of the energy used in each half hour over usageSpan up to the
-// time, except the fuels which are hidden. Each reading is held for its half hour and the line stops at
-// the end of the newest, so a reading which is late leaves a gap before the time.
-func (s *Store) renderUsage(w, h int, now time.Time, hide map[string]bool) string {
-	from := now.Add(-usageSpan)
-
+// renderUsage draws a line for each fuel of the energy used in each half hour from the time up to now,
+// except the fuels which are hidden. Each reading is held for its half hour and the line stops at the
+// end of the newest, so a reading which is late leaves a gap before now.
+func (s *Store) renderUsage(w, h int, from, now time.Time, hide map[string]bool) string {
 	var plots []plot
 
 	for _, u := range s.usage() {

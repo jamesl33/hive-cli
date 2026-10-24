@@ -136,12 +136,6 @@ func (m Model) WindowStart(now time.Time) time.Time {
 	return now.Add(-windows[m.window])
 }
 
-// HistoryStart returns where history is loaded from at the time: the start of the window, or of the
-// usage chart if that goes back further.
-func (m Model) HistoryStart(now time.Time) time.Time {
-	return slices.MinFunc([]time.Time{m.WindowStart(now), now.Add(-usageSpan)}, time.Time.Compare)
-}
-
 // Init starts reading reports and redrawing.
 func (m Model) Init() tea.Cmd {
 	return tea.Batch(m.wait(), m.tick())
@@ -204,7 +198,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			m.window = (m.window + step) % len(windows)
 
-			err := m.store.Reload(m.HistoryStart(time.Now()))
+			err := m.store.Reload(m.WindowStart(time.Now()))
 			if err != nil {
 				m.err = fmt.Errorf("failed to load history: %w", err)
 
@@ -374,12 +368,12 @@ func (m Model) draw(now time.Time) string {
 	rows = append(rows, lipgloss.JoinHorizontal(lipgloss.Top, top...))
 
 	if hasUsage {
-		rows = append(rows, box("Fuels", "7d", m.store.fuels(now, hide), m.width))
+		rows = append(rows, box("Fuels", formatWindow(windows[m.window]), m.store.fuels(from, hide), m.width))
 	}
 
 	if hasUsage && usageH >= minUsageHeight {
-		usage := m.store.renderUsage(m.width-2, usageH, now, hide)
-		rows = append(rows, box("Usage kWh/30m, 7d", m.store.usageCorner(now), usage, m.width))
+		usage := m.store.renderUsage(m.width-2, usageH, from, now, hide)
+		rows = append(rows, box("Usage kWh/30m", m.store.usageCorner(now), usage, m.width))
 	}
 
 	boiler := formatOn(boilerOnTime(m.store.Series[Boiler][m.store.Receiver.Name], from, now), windows[m.window])
