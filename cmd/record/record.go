@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/jamesl33/hive-cli/internal/dashboard"
+	"github.com/jamesl33/hive-cli/internal/octopus"
 	"github.com/jamesl33/hive-cli/internal/z2m"
 	"github.com/spf13/cobra"
 )
@@ -23,6 +24,7 @@ const flushEvery = 10 * time.Minute
 type Record struct {
 	options *z2m.Options
 	dir     string
+	gas     gasOptions
 }
 
 // NewRecord creates a new command for recording the history shown by the dashboard.
@@ -43,6 +45,29 @@ func NewRecord(options *z2m.Options) *cobra.Command {
 		"directory to record history in (HIVE_HISTORY)",
 	)
 
+	cmd.Flags().StringVar(
+		&r.gas.mprn,
+		"octopus-mprn",
+		z2m.Env("OCTOPUS_MPRN", ""),
+		"gas meter point number, to record the gas used; also needs OCTOPUS_API_KEY (OCTOPUS_MPRN)",
+	)
+
+	cmd.Flags().StringVar(
+		&r.gas.serial,
+		"octopus-serial",
+		z2m.Env("OCTOPUS_GAS_SERIAL", ""),
+		"gas meter serial number (OCTOPUS_GAS_SERIAL)",
+	)
+
+	cmd.Flags().StringVar(
+		&r.gas.units,
+		"gas-units",
+		z2m.Env("OCTOPUS_GAS_UNITS", string(octopus.M3)),
+		"what the gas meter reports: m3 for SMETS2 or kwh for SMETS1 (OCTOPUS_GAS_UNITS)",
+	)
+
+	cmd.Flags().Float64Var(&r.gas.cv, "gas-cv", 39.5, "calorific value in MJ/m³ from the gas bill, used when the meter reports m3")
+
 	return &cmd
 }
 
@@ -51,6 +76,12 @@ func (r *Record) Run(ctx context.Context) error {
 	log, err := dashboard.OpenLog(r.dir)
 	if err != nil {
 		return fmt.Errorf("failed to open history: %w", err)
+	}
+
+	// The key is only read from the environment, as a flag is visible to every user in the process list
+	gas, err := r.gas.client(os.Getenv("OCTOPUS_API_KEY"))
+	if err != nil {
+		return err
 	}
 
 	feed, err := z2m.Watch(ctx, r.options)
@@ -66,6 +97,10 @@ func (r *Record) Run(ctx context.Context) error {
 	var wg sync.WaitGroup
 
 	wg.Go(func() { flushLoop(ctx, log) })
+
+	if gas != nil {
+		wg.Go(func() { gasLoop(ctx, gas, log, r.dir) })
+	}
 
 	err = consume(ctx, feed, log)
 
