@@ -20,8 +20,8 @@ const (
 	Target      Metric = "target"
 
 	// Gas is the kWh of gas used in the half hour starting at the sample, from the smart meter. It is
-	// recorded for analysis and is not shown by the dashboard. As with every metric a repeated value
-	// is dropped, so a half hour without a sample has the value of the one before.
+	// drawn on the usage chart. As with every metric a repeated value is dropped, so a half hour
+	// without a sample has the value of the one before.
 	Gas Metric = "gas"
 )
 
@@ -157,10 +157,6 @@ func (s *Store) Reload(from time.Time) error {
 
 // add appends a sample to its series.
 func (s *Store) add(sample Sample) {
-	if sample.Metric == Gas {
-		return
-	}
-
 	s.version++
 
 	if s.Series[sample.Metric] == nil {
@@ -169,6 +165,11 @@ func (s *Store) add(sample Sample) {
 
 	series := s.Series[sample.Metric]
 	series[sample.Device] = series[sample.Device].Append(Point{At: sample.At, Value: sample.Value})
+
+	// Energy use comes from the meter, not a device, so it has no place in the legend or the keys
+	if isUsage(sample.Metric) {
+		return
+	}
 
 	i, found := slices.BinarySearch(s.Order, sample.Device)
 	if !found {

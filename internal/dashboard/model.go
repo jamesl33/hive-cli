@@ -135,6 +135,21 @@ func (m Model) WindowStart(now time.Time) time.Time {
 	return now.Add(-windows[m.window])
 }
 
+// HistoryStart returns where history is loaded from at the time: the start of the window, or of the
+// usage chart if that goes back further.
+func (m Model) HistoryStart(now time.Time) time.Time {
+	return earliest(m.WindowStart(now), now.Add(-usageSpan))
+}
+
+// earliest returns the earlier of the two times.
+func earliest(a, b time.Time) time.Time {
+	if b.Before(a) {
+		return b
+	}
+
+	return a
+}
+
 // Init starts reading reports and redrawing.
 func (m Model) Init() tea.Cmd {
 	return tea.Batch(m.wait(), m.tick())
@@ -193,7 +208,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			m.window = (m.window + step) % len(windows)
 
-			err := m.store.Reload(m.WindowStart(time.Now()))
+			err := m.store.Reload(m.HistoryStart(time.Now()))
 			if err != nil {
 				m.err = fmt.Errorf("failed to load history: %w", err)
 
@@ -336,7 +351,17 @@ func (m Model) draw(now time.Time) string {
 	// borders of each box.
 	hasHumidity := len(m.store.Series[Humidity]) > 0
 	boxes := 3 + boolInt(hasHumidity) + boolInt(len(batteries) > 0)
-	tempH, humH := m.height-1-2*boxes-2-len(batteries), 0
+	tempH, humH, usageH := m.height-1-2*boxes-2-len(batteries), 0, 0
+
+	// The usage chart takes a quarter of what is left, with its own border, if that is enough to draw
+	if m.store.hasUsage() {
+		usageH = (tempH - 2) / 4
+		if usageH < minUsageHeight {
+			usageH = 0
+		} else {
+			tempH -= usageH + 2
+		}
+	}
 
 	if hasHumidity {
 		tempH, humH = tempH*3/5, tempH-tempH*3/5
@@ -356,6 +381,11 @@ func (m Model) draw(now time.Time) string {
 
 	boiler := formatOn(boilerOnTime(m.store.Series[Boiler][m.store.Receiver.Name], from, now), windows[m.window])
 	rows = append(rows, box("Boiler "+boiler, "", strings.Join(m.store.boilerRows(temp, from, now), "\n"), m.width))
+
+	if usageH > 0 {
+		usage := m.store.renderUsage(inner, usageH, now)
+		rows = append(rows, box("Usage kWh per 30m", m.store.usageCorner(now), usage, m.width))
+	}
 
 	if len(batteries) > 0 {
 		rows = append(rows, box("Battery", "", strings.Join(batteries, "\n"), m.width))

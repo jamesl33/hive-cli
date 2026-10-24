@@ -33,7 +33,19 @@ const (
 
 	// targetColor is the colour of the target line on the temperature chart.
 	targetColor = lipgloss.Color("231")
+
+	// usageSpan is how far back the usage chart goes, whatever the window.
+	usageSpan = 7 * 24 * time.Hour
+
+	// usageStep is the time covered by each reading of energy use.
+	usageStep = 30 * time.Minute
+
+	// minUsageHeight is the shortest usage chart which is drawn.
+	minUsageHeight = 3
 )
+
+// usageColors are the metrics of energy used, which the usage chart draws, with their colours.
+var usageColors = map[Metric]lipgloss.Color{Gas: "214"}
 
 // palette is the colours of the devices, in the order of their names.
 var palette = []lipgloss.Color{"39", "208", "42", "205", "220", "141", "51", "203"}
@@ -197,6 +209,106 @@ func (s *Store) renderChart(metric Metric, hide map[string]bool, w, h int, from,
 	return chart{view: c.View(), left: c.Origin().X + 1, width: c.GraphWidth()}
 }
 
+// isUsage returns whether the metric is energy used, which is drawn on the usage chart.
+func isUsage(m Metric) bool {
+	_, ok := usageColors[m]
+
+	return ok
+}
+
+// hasUsage returns whether any energy use has been recorded.
+func (s *Store) hasUsage() bool {
+	for m := range usageColors {
+		if len(s.Series[m]) > 0 {
+			return true
+		}
+	}
+
+	return false
+}
+
+// usageEnd returns when the newest reading of energy use ends, or the zero time if there is none.
+func (s *Store) usageEnd() time.Time {
+	var end time.Time
+
+	for m := range usageColors {
+		for _, series := range s.Series[m] {
+			if p, ok := series.Last(); ok && p.At.Add(usageStep).After(end) {
+				end = p.At.Add(usageStep)
+			}
+		}
+	}
+
+	return end
+}
+
+// usageCorner says how far behind the usage chart is, in the colour of a warning, as readings come
+// from the smart meter about a day late and the line stops short of the right edge.
+func (s *Store) usageCorner(now time.Time) string {
+	end := s.usageEnd()
+	behind := max(now.Sub(end), 0)
+
+	text := fmt.Sprintf("%dd · to %s · %s behind", usageSpan/(24*time.Hour), end.Local().Format("Mon 15:04"), formatWindow(behind))
+
+	return lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Render(text)
+}
+
+// renderUsage draws a line for each fuel of the energy used in each half hour over usageSpan up to the
+// time. Each reading is held for its half hour and the line stops at the end of the newest, so a
+// reading which is late leaves a gap before the time.
+func (s *Store) renderUsage(w, h int, now time.Time) string {
+	type line struct {
+		name   string
+		metric Metric
+		points Series
+	}
+
+	from := now.Add(-usageSpan)
+	hi := 0.0
+
+	var lines []line
+
+	for _, metric := range slices.Sorted(maps.Keys(usageColors)) {
+		for _, device := range slices.Sorted(maps.Keys(s.Series[metric])) {
+			series := visible(s.Series[metric][device], from)
+			if len(series) == 0 {
+				continue
+			}
+
+			last := series[len(series)-1]
+			points := append(stepped(series), Point{At: last.At.Add(usageStep), Value: last.Value})
+			points = downsample(clamp(points, from), from, now, w*2)
+
+			for _, p := range points {
+				hi = math.Max(hi, p.Value)
+			}
+
+			lines = append(lines, line{name: device, metric: metric, points: points})
+		}
+	}
+
+	c := timeserieslinechart.New(w, h,
+		timeserieslinechart.WithTimeRange(from, now),
+		timeserieslinechart.WithYRange(0, math.Max(hi*1.1, 0.1)),
+		timeserieslinechart.WithXYSteps(1, 4),
+		timeserieslinechart.WithYLabelFormatter(func(_ int, v float64) string { return fmt.Sprintf("%.1f", v) }),
+	)
+
+	c.XLabelFormatter = tickLabels(24*time.Hour, now.Sub(from)/time.Duration(c.GraphWidth()))
+
+	for _, l := range lines {
+		for _, p := range l.points {
+			c.PushDataSet(l.name, timeserieslinechart.TimePoint{Time: p.At, Value: p.Value})
+		}
+
+		c.SetDataSetStyle(l.name, lipgloss.NewStyle().Foreground(usageColors[l.metric]))
+	}
+
+	c.DrawBrailleAll()
+
+	return c.View()
+}
+
 // tickSteps are the spacings of the labels on a time axis, which fall on multiples of the spacing.
 var tickSteps = []time.Duration{
 	10 * time.Second, 15 * time.Second, 30 * time.Second, time.Minute, 5 * time.Minute, 10 * time.Minute,
@@ -222,7 +334,11 @@ func tickStep(span time.Duration) time.Duration {
 // column covers.
 func tickLabels(step, col time.Duration) linechart.LabelFormatter {
 	layout := "15:04"
-	if step < time.Minute {
+
+	switch {
+	case step >= 24*time.Hour:
+		layout = "Mon 02"
+	case step < time.Minute:
 		layout = "15:04:05"
 	}
 

@@ -55,7 +55,7 @@ func (d *Dashboard) Run(ctx context.Context) error {
 
 	model := dashboard.New(ctx, feed, store)
 
-	err = store.Restore(d.dir, model.WindowStart(time.Now()))
+	err = store.Restore(d.dir, model.HistoryStart(time.Now()))
 	if err != nil {
 		return fmt.Errorf("failed to load history: %w", err)
 	}
