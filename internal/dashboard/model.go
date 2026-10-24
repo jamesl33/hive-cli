@@ -139,16 +139,7 @@ func (m Model) WindowStart(now time.Time) time.Time {
 // HistoryStart returns where history is loaded from at the time: the start of the window, or of the
 // usage chart if that goes back further.
 func (m Model) HistoryStart(now time.Time) time.Time {
-	return earliest(m.WindowStart(now), now.Add(-usageSpan))
-}
-
-// earliest returns the earlier of the two times.
-func earliest(a, b time.Time) time.Time {
-	if b.Before(a) {
-		return b
-	}
-
-	return a
+	return slices.MinFunc([]time.Time{m.WindowStart(now), now.Add(-usageSpan)}, time.Time.Compare)
 }
 
 // Init starts reading reports and redrawing.
