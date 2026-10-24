@@ -355,8 +355,6 @@ func (m Model) draw(now time.Time) string {
 	tempH, usageH := m.height-1-2*boxes-2-len(batteries)-boolInt(hasUsage), 0
 
 	if hasUsage {
-		rows = append(rows, box("Fuels", "7d", m.store.fuels(now), m.width))
-
 		tempH, usageH = tempH/2, tempH-tempH/2
 	}
 
@@ -378,6 +376,10 @@ func (m Model) draw(now time.Time) string {
 	}
 
 	rows = append(rows, lipgloss.JoinHorizontal(lipgloss.Top, top...))
+
+	if hasUsage {
+		rows = append(rows, box("Fuels", "7d", m.store.fuels(now), m.width))
+	}
 
 	if hasUsage && usageH >= minUsageHeight {
 		usage := m.store.renderUsage(m.width-2, usageH, now)
