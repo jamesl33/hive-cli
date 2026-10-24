@@ -218,7 +218,24 @@ type plot struct {
 // turn along the row, so no line is hidden by another.
 func drawPlots(fresh func() timeserieslinechart.Model, plots []plot) timeserieslinechart.Model {
 	c := fresh()
+	layers := drawLayers(fresh, plots)
 
+	if len(layers) == 0 {
+		return c
+	}
+
+	c.Clear()
+	c.DrawXYAxisAndLabel()
+
+	for y := range c.GraphHeight() {
+		mergeRow(&c, layers, y)
+	}
+
+	return c
+}
+
+// drawLayers returns a chart made by fresh for each plot which has points, with the line drawn on it.
+func drawLayers(fresh func() timeserieslinechart.Model, plots []plot) []timeserieslinechart.Model {
 	var layers []timeserieslinechart.Model
 
 	for _, p := range plots {
@@ -237,41 +254,46 @@ func drawPlots(fresh func() timeserieslinechart.Model, plots []plot) timeseriesl
 		layers = append(layers, l)
 	}
 
-	if len(layers) == 0 {
-		return c
-	}
+	return layers
+}
 
-	c.Clear()
-	c.DrawXYAxisAndLabel()
-
+// mergeRow sets the cells of the row of the chart to those of the layers combined.
+func mergeRow(c *timeserieslinechart.Model, layers []timeserieslinechart.Model, y int) {
 	left := c.Origin().X + 1
 
-	for y := range c.GraphHeight() {
-		for x := range c.GraphWidth() {
-			at := canvas.Point{X: left + x, Y: y}
+	for x := range c.GraphWidth() {
+		at := canvas.Point{X: left + x, Y: y}
 
-			var dots rune
-
-			var styles []lipgloss.Style
-
-			for i := range layers {
-				cell := layers[i].Canvas.Cell(at)
-				if cell.Rune <= brailleBlank || cell.Rune > brailleFull {
-					continue
-				}
-
-				dots |= cell.Rune - brailleBlank
-
-				styles = append(styles, cell.Style)
-			}
-
-			if len(styles) > 0 {
-				c.Canvas.SetCell(at, canvas.Cell{Rune: brailleBlank + dots, Style: styles[x%len(styles)]})
-			}
+		cell, ok := mergeCell(layers, at, x)
+		if ok {
+			c.Canvas.SetCell(at, cell)
 		}
 	}
+}
 
-	return c
+// mergeCell returns the cell at the point which holds the dots of every layer there, in the colour of
+// the layer which column x falls to; it returns false if no layer has dots there.
+func mergeCell(layers []timeserieslinechart.Model, at canvas.Point, x int) (canvas.Cell, bool) {
+	var dots rune
+
+	var styles []lipgloss.Style
+
+	for i := range layers {
+		cell := layers[i].Canvas.Cell(at)
+		if cell.Rune <= brailleBlank || cell.Rune > brailleFull {
+			continue
+		}
+
+		dots |= cell.Rune - brailleBlank
+
+		styles = append(styles, cell.Style)
+	}
+
+	if len(styles) == 0 {
+		return canvas.Cell{}, false
+	}
+
+	return canvas.Cell{Rune: brailleBlank + dots, Style: styles[x%len(styles)]}, true
 }
 
 // The braille runes with no dots and with all of them.
