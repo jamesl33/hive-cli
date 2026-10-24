@@ -88,7 +88,6 @@ func (r *Record) Run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to watch devices: %w", err)
 	}
-
 	defer feed.Close()
 
 	ctx, stop := context.WithCancel(ctx)
@@ -137,7 +136,6 @@ func flushLoop(ctx context.Context, log *dashboard.Log) {
 
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGUSR1)
-
 	defer signal.Stop(sigs)
 
 	for {

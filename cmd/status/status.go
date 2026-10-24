@@ -34,7 +34,6 @@ func (s *Status) Run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to open session: %w", err)
 	}
-
 	defer session.Close()
 
 	err = session.Read(ctx, hive.StatusKeys(session.Receiver))

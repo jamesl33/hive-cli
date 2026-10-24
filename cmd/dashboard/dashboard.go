@@ -48,7 +48,6 @@ func (d *Dashboard) Run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to watch devices: %w", err)
 	}
-
 	defer feed.Close()
 
 	store := dashboard.NewStore(feed.Receiver)

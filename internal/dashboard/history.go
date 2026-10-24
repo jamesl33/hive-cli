@@ -244,7 +244,6 @@ func (l *Log) write() error {
 	if err != nil {
 		return fmt.Errorf("failed to open history: %w", err)
 	}
-
 	defer f.Close() // Closing again after the checked close below is harmless
 
 	_, err = f.Write(l.pending)
@@ -327,7 +326,6 @@ func readDay(dir string, day time.Time) ([]record, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to read history: %w", err)
 	}
-
 	defer f.Close()
 
 	var records []record

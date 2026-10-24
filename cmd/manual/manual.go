@@ -39,7 +39,6 @@ func (m *Manual) Run(ctx context.Context, temp string) error {
 	if err != nil {
 		return fmt.Errorf("failed to open session: %w", err)
 	}
-
 	defer session.Close()
 
 	return session.Apply(ctx, hive.HeatManual(session.Receiver, t))

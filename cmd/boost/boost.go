@@ -51,7 +51,6 @@ func (b *Boost) Run(ctx context.Context, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to open session: %w", err)
 	}
-
 	defer session.Close()
 
 	return session.Apply(ctx, hive.HeatBoost(session.Receiver, mins, temp))
