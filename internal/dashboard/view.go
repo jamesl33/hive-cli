@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/NimbleMarkets/ntcharts/canvas"
 	"github.com/NimbleMarkets/ntcharts/linechart"
 	"github.com/NimbleMarkets/ntcharts/linechart/timeserieslinechart"
 	"github.com/charmbracelet/lipgloss"
@@ -175,39 +176,109 @@ func (s *Store) renderChart(metric Metric, hide map[string]bool, w, h int, from,
 
 	lo, hi := valueRange(from, byDevice, targets)
 
-	c := timeserieslinechart.New(w, h,
-		timeserieslinechart.WithTimeRange(from, to),
-		timeserieslinechart.WithYRange(lo, hi),
-		timeserieslinechart.WithXYSteps(1, 4),
-		timeserieslinechart.WithYLabelFormatter(func(_ int, v float64) string { return fmt.Sprintf("%.1f", v) }),
-	)
+	fresh := func() timeserieslinechart.Model {
+		c := timeserieslinechart.New(w, h,
+			timeserieslinechart.WithTimeRange(from, to),
+			timeserieslinechart.WithYRange(lo, hi),
+			timeserieslinechart.WithXYSteps(1, 4),
+			timeserieslinechart.WithYLabelFormatter(func(_ int, v float64) string { return fmt.Sprintf("%.1f", v) }),
+		)
 
-	c.XLabelFormatter = tickLabels(tickStep(to.Sub(from)), to.Sub(from)/time.Duration(c.GraphWidth()))
+		c.XLabelFormatter = tickLabels(tickStep(to.Sub(from)), to.Sub(from)/time.Duration(c.GraphWidth()))
+
+		return c
+	}
+
+	var plots []plot
 
 	for i, device := range s.Order {
 		points := downsample(clamp(spanned(visible(byDevice[device], from), to), from), from, to, w*2)
-		for _, p := range points {
-			c.PushDataSet(device, timeserieslinechart.TimePoint{Time: p.At, Value: p.Value})
-		}
-
-		if len(points) > 0 {
-			c.SetDataSetStyle(device, lipgloss.NewStyle().Foreground(color(i)))
-		}
+		plots = append(plots, plot{style: lipgloss.NewStyle().Foreground(color(i)), points: points})
 	}
 
-	for device, series := range targets {
-		name := device + " target"
-		for _, p := range downsample(clamp(spanned(stepped(visible(series, from)), to), from), from, to, w*2) {
-			c.PushDataSet(name, timeserieslinechart.TimePoint{Time: p.At, Value: p.Value})
-		}
-
-		c.SetDataSetStyle(name, lipgloss.NewStyle().Foreground(targetColor))
+	for _, device := range slices.Sorted(maps.Keys(targets)) {
+		points := downsample(clamp(spanned(stepped(visible(targets[device], from)), to), from), from, to, w*2)
+		plots = append(plots, plot{style: lipgloss.NewStyle().Foreground(targetColor), points: points})
 	}
 
-	c.DrawBrailleAll()
+	c := drawPlots(fresh, plots)
 
 	return chart{view: c.View(), left: c.Origin().X + 1, width: c.GraphWidth()}
 }
+
+// plot is a line of a chart.
+type plot struct {
+	style  lipgloss.Style
+	points Series
+}
+
+// drawPlots returns the chart made by fresh with the lines drawn. Each line is drawn on a chart of its
+// own and the cells are combined, as a chart gives a cell to the line drawn last. A cell which more
+// than one line passes through holds the dots of all of them, and takes the colours of the lines in
+// turn along the row, so no line is hidden by another.
+func drawPlots(fresh func() timeserieslinechart.Model, plots []plot) timeserieslinechart.Model {
+	c := fresh()
+
+	var layers []timeserieslinechart.Model
+
+	for _, p := range plots {
+		if len(p.points) == 0 {
+			continue
+		}
+
+		l := fresh()
+		for _, pt := range p.points {
+			l.Push(timeserieslinechart.TimePoint{Time: pt.At, Value: pt.Value})
+		}
+
+		l.SetStyle(p.style)
+		l.DrawBraille()
+
+		layers = append(layers, l)
+	}
+
+	if len(layers) == 0 {
+		return c
+	}
+
+	c.Clear()
+	c.DrawXYAxisAndLabel()
+
+	left := c.Origin().X + 1
+
+	for y := range c.GraphHeight() {
+		for x := range c.GraphWidth() {
+			at := canvas.Point{X: left + x, Y: y}
+
+			var dots rune
+
+			var styles []lipgloss.Style
+
+			for i := range layers {
+				cell := layers[i].Canvas.Cell(at)
+				if cell.Rune <= brailleBlank || cell.Rune > brailleFull {
+					continue
+				}
+
+				dots |= cell.Rune - brailleBlank
+
+				styles = append(styles, cell.Style)
+			}
+
+			if len(styles) > 0 {
+				c.Canvas.SetCell(at, canvas.Cell{Rune: brailleBlank + dots, Style: styles[x%len(styles)]})
+			}
+		}
+	}
+
+	return c
+}
+
+// The braille runes with no dots and with all of them.
+const (
+	brailleBlank = '⠀'
+	brailleFull  = '⣿'
+)
 
 // isUsage returns whether the metric is energy used, which is drawn on the usage chart.
 func isUsage(m Metric) bool {
@@ -279,16 +350,10 @@ func (s *Store) fuels(now time.Time) string {
 // time. Each reading is held for its half hour and the line stops at the end of the newest, so a
 // reading which is late leaves a gap before the time.
 func (s *Store) renderUsage(w, h int, now time.Time) string {
-	type line struct {
-		name   string
-		metric Metric
-		points Series
-	}
-
 	from := now.Add(-usageSpan)
 	hi := 0.0
 
-	var lines []line
+	var plots []plot
 
 	for _, metric := range slices.Sorted(maps.Keys(usageColors)) {
 		for _, device := range slices.Sorted(maps.Keys(s.Series[metric])) {
@@ -305,28 +370,24 @@ func (s *Store) renderUsage(w, h int, now time.Time) string {
 				hi = math.Max(hi, p.Value)
 			}
 
-			lines = append(lines, line{name: device, metric: metric, points: points})
+			plots = append(plots, plot{style: lipgloss.NewStyle().Foreground(usageColors[metric]), points: points})
 		}
 	}
 
-	c := timeserieslinechart.New(w, h,
-		timeserieslinechart.WithTimeRange(from, now),
-		timeserieslinechart.WithYRange(0, math.Max(hi*1.1, 0.1)),
-		timeserieslinechart.WithXYSteps(1, 4),
-		timeserieslinechart.WithYLabelFormatter(func(_ int, v float64) string { return fmt.Sprintf("%.1f", v) }),
-	)
+	fresh := func() timeserieslinechart.Model {
+		c := timeserieslinechart.New(w, h,
+			timeserieslinechart.WithTimeRange(from, now),
+			timeserieslinechart.WithYRange(0, math.Max(hi*1.1, 0.1)),
+			timeserieslinechart.WithXYSteps(1, 4),
+			timeserieslinechart.WithYLabelFormatter(func(_ int, v float64) string { return fmt.Sprintf("%.1f", v) }),
+		)
 
-	c.XLabelFormatter = tickLabels(24*time.Hour, now.Sub(from)/time.Duration(c.GraphWidth()))
+		c.XLabelFormatter = tickLabels(24*time.Hour, now.Sub(from)/time.Duration(c.GraphWidth()))
 
-	for _, l := range lines {
-		for _, p := range l.points {
-			c.PushDataSet(l.name, timeserieslinechart.TimePoint{Time: p.At, Value: p.Value})
-		}
-
-		c.SetDataSetStyle(l.name, lipgloss.NewStyle().Foreground(usageColors[l.metric]))
+		return c
 	}
 
-	c.DrawBrailleAll()
+	c := drawPlots(fresh, plots)
 
 	return c.View()
 }

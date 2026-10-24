@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NimbleMarkets/ntcharts/canvas"
+	"github.com/NimbleMarkets/ntcharts/linechart/timeserieslinechart"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/stretchr/testify/assert"
@@ -115,4 +117,37 @@ func TestViewFitsUsageAtMinHeight(t *testing.T) {
 	assert.LessOrEqual(t, strings.Count(view, "\n")+1, height)
 	assert.Contains(t, view, "Fuels")
 	assert.Contains(t, view, "Usage")
+}
+
+func TestDrawPlotsAlternatesOverlappingLines(t *testing.T) {
+	from := time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
+	to := from.Add(time.Hour)
+
+	fresh := func() timeserieslinechart.Model {
+		return timeserieslinechart.New(40, 8,
+			timeserieslinechart.WithTimeRange(from, to),
+			timeserieslinechart.WithYRange(0, 10),
+		)
+	}
+
+	points := Series{{At: from, Value: 5}, {At: to, Value: 5}}
+	red, blue := lipgloss.Color("1"), lipgloss.Color("4")
+
+	c := drawPlots(fresh, []plot{
+		{style: lipgloss.NewStyle().Foreground(red), points: points},
+		{style: lipgloss.NewStyle().Foreground(blue), points: points},
+	})
+
+	colors := map[lipgloss.TerminalColor]bool{}
+
+	for y := range c.GraphHeight() {
+		for x := range c.GraphWidth() {
+			cell := c.Canvas.Cell(canvas.Point{X: c.Origin().X + 1 + x, Y: y})
+			if cell.Rune > brailleBlank && cell.Rune <= brailleFull {
+				colors[cell.Style.GetForeground()] = true
+			}
+		}
+	}
+
+	assert.Len(t, colors, 2)
 }
