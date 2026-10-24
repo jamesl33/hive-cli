@@ -16,6 +16,10 @@ const (
 
 	// usageBackfill is how far back the first fetch goes, within what the history keeps.
 	usageBackfill = 28 * 24 * time.Hour
+
+	// gasCalorificValue is the MJ/m³ of the gas, used to convert the volume a SMETS2 meter reports to
+	// energy.
+	gasCalorificValue = 39.5
 )
 
 // meterOptions defines the options for recording the energy used by one meter, which is skipped if none
@@ -24,8 +28,6 @@ type meterOptions struct {
 	fuel   octopus.Fuel
 	point  string
 	serial string
-	units  string
-	cv     float64
 }
 
 // metric returns the metric the meter's use is recorded as, which is named for the fuel. It is also the
@@ -44,19 +46,14 @@ func (o meterOptions) client(key string) (*octopus.Client, error) {
 		return nil, fmt.Errorf("OCTOPUS_API_KEY and the %s meter point and serial must all be set", o.fuel)
 	}
 
-	units := octopus.Units(o.units)
-	if o.fuel == octopus.Gas && units != octopus.M3 && units != octopus.KWh {
-		return nil, fmt.Errorf("unknown gas units %q, expected %s or %s", o.units, octopus.M3, octopus.KWh)
-	}
-
 	c := octopus.Client{
 		BaseURL:        octopus.BaseURL,
 		Key:            key,
 		Fuel:           o.fuel,
 		Point:          o.point,
 		Serial:         o.serial,
-		Units:          units,
-		CalorificValue: o.cv,
+		Units:          octopus.M3,
+		CalorificValue: gasCalorificValue,
 	}
 
 	return &c, nil

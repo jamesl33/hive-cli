@@ -59,21 +59,18 @@ func TestRecordUsage(t *testing.T) {
 }
 
 func TestMeterOptionsClient(t *testing.T) {
-	_, err := meterOptions{fuel: octopus.Gas, point: "1", units: "m3"}.client("")
+	_, err := meterOptions{fuel: octopus.Gas, point: "1"}.client("")
 	assert.Error(t, err)
 
-	c, err := meterOptions{fuel: octopus.Gas, units: "m3"}.client("")
+	c, err := meterOptions{fuel: octopus.Gas}.client("")
 	assert.NoError(t, err)
 	assert.Nil(t, c)
 
-	_, err = meterOptions{fuel: octopus.Gas, point: "1", serial: "2", units: "gallons"}.client("k")
-	assert.Error(t, err)
-
-	c, err = meterOptions{fuel: octopus.Gas, point: "1", serial: "2", units: "m3", cv: 39.5}.client("k")
+	c, err = meterOptions{fuel: octopus.Gas, point: "1", serial: "2"}.client("k")
 	require.NoError(t, err)
 	assert.Equal(t, "1", c.Point)
+	assert.Equal(t, octopus.M3, c.Units)
 
-	// Electricity has no units to get wrong
 	c, err = meterOptions{fuel: octopus.Electricity, point: "3", serial: "4"}.client("k")
 	require.NoError(t, err)
 	assert.Equal(t, octopus.Electricity, c.Fuel)
