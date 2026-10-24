@@ -354,22 +354,76 @@ func (s *Store) fuels(now time.Time, hide map[string]bool) string {
 
 	var parts []string
 
-	for _, metric := range slices.Sorted(maps.Keys(usageColors)) {
-		for _, device := range slices.Sorted(maps.Keys(s.Series[metric])) {
-			total := 0.0
-
-			for _, p := range s.Series[metric][device] {
-				if p.At.After(from) {
-					total += p.Value
-				}
-			}
-
-			style := lipgloss.NewStyle().Foreground(usageColors[metric]).Strikethrough(hide[device])
-			parts = append(parts, style.Render(fmt.Sprintf("%s ● %s %.1f kWh", fuelKeys[metric], device, total)))
-		}
+	for _, u := range s.usage() {
+		style := lipgloss.NewStyle().Foreground(usageColors[u.metric]).Strikethrough(hide[u.device])
+		parts = append(parts, style.Render(fmt.Sprintf("%s ● %s %.1f kWh", fuelKeys[u.metric], u.device, u.series.sum(from))))
 	}
 
 	return strings.Join(parts, "  ")
+}
+
+// meter is the readings of energy used from one device.
+type meter struct {
+	metric Metric
+	device string
+	series Series
+}
+
+// usage returns the readings of each device which has any, in the order of their metric and name.
+func (s *Store) usage() []meter {
+	var meters []meter
+
+	for _, metric := range slices.Sorted(maps.Keys(usageColors)) {
+		for _, device := range slices.Sorted(maps.Keys(s.Series[metric])) {
+			meters = append(meters, meter{metric: metric, device: device, series: s.Series[metric][device]})
+		}
+	}
+
+	return meters
+}
+
+// sum returns the energy used in the readings after the time.
+func (s Series) sum(from time.Time) float64 {
+	total := 0.0
+
+	for _, p := range s {
+		if p.At.After(from) {
+			total += p.Value
+		}
+	}
+
+	return total
+}
+
+// usagePlot returns the line of the readings from the time to now, held for their half hour so it
+// stops at the end of the newest, with at most 2*w points.
+func usagePlot(series Series, from, now time.Time, w int, style lipgloss.Style) plot {
+	last := series[len(series)-1]
+	points := append(stepped(series), Point{At: last.At.Add(usageStep), Value: last.Value})
+
+	return plot{style: style, points: downsample(clamp(points, from), from, now, w*2)}
+}
+
+// highest returns the largest value of the plots.
+func highest(plots []plot) float64 {
+	hi := 0.0
+
+	for _, p := range plots {
+		hi = math.Max(hi, p.points.peak())
+	}
+
+	return hi
+}
+
+// peak returns the largest value in the series, or 0 if it is empty.
+func (s Series) peak() float64 {
+	hi := 0.0
+
+	for _, p := range s {
+		hi = math.Max(hi, p.Value)
+	}
+
+	return hi
 }
 
 // renderUsage draws a line for each fuel of the energy used in each half hour over usageSpan up to the
@@ -377,28 +431,19 @@ func (s *Store) fuels(now time.Time, hide map[string]bool) string {
 // the end of the newest, so a reading which is late leaves a gap before the time.
 func (s *Store) renderUsage(w, h int, now time.Time, hide map[string]bool) string {
 	from := now.Add(-usageSpan)
-	hi := 0.0
 
 	var plots []plot
 
-	for _, metric := range slices.Sorted(maps.Keys(usageColors)) {
-		for _, device := range slices.Sorted(maps.Keys(s.Series[metric])) {
-			series := visible(s.Series[metric][device], from)
-			if len(series) == 0 || hide[device] {
-				continue
-			}
-
-			last := series[len(series)-1]
-			points := append(stepped(series), Point{At: last.At.Add(usageStep), Value: last.Value})
-			points = downsample(clamp(points, from), from, now, w*2)
-
-			for _, p := range points {
-				hi = math.Max(hi, p.Value)
-			}
-
-			plots = append(plots, plot{style: lipgloss.NewStyle().Foreground(usageColors[metric]), points: points})
+	for _, u := range s.usage() {
+		series := visible(u.series, from)
+		if len(series) == 0 || hide[u.device] {
+			continue
 		}
+
+		plots = append(plots, usagePlot(series, from, now, w, lipgloss.NewStyle().Foreground(usageColors[u.metric])))
 	}
+
+	hi := highest(plots)
 
 	fresh := func() timeserieslinechart.Model {
 		c := timeserieslinechart.New(w, h,
