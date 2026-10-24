@@ -351,41 +351,35 @@ func (m Model) draw(now time.Time) string {
 	// borders of each box.
 	hasHumidity := len(m.store.Series[Humidity]) > 0
 	hasUsage := m.store.hasUsage()
-	boxes := 3 + boolInt(hasHumidity || hasUsage) + boolInt(len(batteries) > 0)
-	tempH, lowerH := m.height-1-2*boxes-2-len(batteries), 0
+	boxes := 3 + boolInt(hasUsage) + boolInt(len(batteries) > 0)
+	tempH, usageH := m.height-1-2*boxes-2-len(batteries), 0
 
-	if hasHumidity || hasUsage {
-		tempH, lowerH = tempH*3/5, tempH-tempH*3/5
+	if hasUsage {
+		tempH, usageH = tempH*3/5, tempH-tempH*3/5
 	}
-
-	inner := m.width - 2
 
 	hide := m.hidden
 
-	temp := m.store.renderChart(Temperature, hide, inner, tempH, from, now)
-	rows = append(rows, box("Temperature °C", "", temp.view, m.width))
-
-	// Humidity and usage share a row, with the wider share to the usage as it has more to say
-	humW, usageW := m.width, m.width
-	if hasHumidity && hasUsage {
+	// Humidity shares the top row with the temperature, which has the wider share
+	tempW, humW := m.width, 0
+	if hasHumidity {
 		humW = m.width * 2 / 5
-		usageW = m.width - humW
+		tempW = m.width - humW
 	}
 
-	var lower []string
+	temp := m.store.renderChart(Temperature, hide, tempW-2, tempH, from, now)
+	top := []string{box("Temperature °C", "", temp.view, tempW)}
 
-	if hasHumidity && lowerH > 0 {
-		humidity := m.store.renderChart(Humidity, hide, humW-2, lowerH, from, now)
-		lower = append(lower, box("Humidity %", "", humidity.view, humW))
+	if hasHumidity {
+		humidity := m.store.renderChart(Humidity, hide, humW-2, tempH, from, now)
+		top = append(top, box("Humidity %", "", humidity.view, humW))
 	}
 
-	if hasUsage && lowerH >= minUsageHeight {
-		usage := m.store.renderUsage(usageW-2, lowerH, now)
-		lower = append(lower, box("Usage kWh/30m, 7d", m.store.usageCorner(now), usage, usageW))
-	}
+	rows = append(rows, lipgloss.JoinHorizontal(lipgloss.Top, top...))
 
-	if len(lower) > 0 {
-		rows = append(rows, lipgloss.JoinHorizontal(lipgloss.Top, lower...))
+	if hasUsage && usageH >= minUsageHeight {
+		usage := m.store.renderUsage(m.width-2, usageH, now)
+		rows = append(rows, box("Usage kWh/30m, 7d", m.store.usageCorner(now), usage, m.width))
 	}
 
 	boiler := formatOn(boilerOnTime(m.store.Series[Boiler][m.store.Receiver.Name], from, now), windows[m.window])

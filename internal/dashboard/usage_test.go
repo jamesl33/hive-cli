@@ -56,7 +56,7 @@ func TestViewShowsUsage(t *testing.T) {
 	}
 }
 
-func TestViewPutsUsageBesideHumidity(t *testing.T) {
+func TestViewPutsHumidityBesideTemperature(t *testing.T) {
 	store := NewStore(receiver)
 	now := time.Now()
 
@@ -80,8 +80,9 @@ func TestViewPutsUsageBesideHumidity(t *testing.T) {
 		}
 	}
 
-	assert.Contains(t, shared, "Usage kWh/30m")
+	assert.Contains(t, shared, "Temperature")
 	assert.Equal(t, 100, lipgloss.Width(shared))
+	assert.Greater(t, strings.Index(view, "Usage kWh/30m"), strings.Index(view, "Humidity"))
 }
 
 func TestViewFitsUsageAtMinHeight(t *testing.T) {
