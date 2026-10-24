@@ -81,13 +81,8 @@ func NewRecord(options *z2m.Options) *cobra.Command {
 	return &cmd
 }
 
-// Run records history until the context is cancelled.
-func (r *Record) Run(ctx context.Context) error {
-	log, err := dashboard.OpenLog(r.dir)
-	if err != nil {
-		return fmt.Errorf("failed to open history: %w", err)
-	}
-
+// meters returns a client for each meter which is configured.
+func (r *Record) meters() ([]*octopus.Client, error) {
 	// The key is only read from the environment, as a flag is visible to every user in the process list
 	key := os.Getenv("OCTOPUS_API_KEY")
 
@@ -96,12 +91,27 @@ func (r *Record) Run(ctx context.Context) error {
 	for _, o := range []meterOptions{r.gas, r.power} {
 		c, err := o.client(key)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		if c != nil {
 			meters = append(meters, c)
 		}
+	}
+
+	return meters, nil
+}
+
+// Run records history until the context is cancelled.
+func (r *Record) Run(ctx context.Context) error {
+	log, err := dashboard.OpenLog(r.dir)
+	if err != nil {
+		return fmt.Errorf("failed to open history: %w", err)
+	}
+
+	meters, err := r.meters()
+	if err != nil {
+		return err
 	}
 
 	feed, err := z2m.Watch(ctx, r.options)
