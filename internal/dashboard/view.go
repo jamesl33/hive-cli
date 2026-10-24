@@ -311,24 +311,16 @@ func isUsage(m Metric) bool {
 
 // hasUsage returns whether any energy use has been recorded.
 func (s *Store) hasUsage() bool {
-	for m := range usageColors {
-		if len(s.Series[m]) > 0 {
-			return true
-		}
-	}
-
-	return false
+	return len(s.usage()) > 0
 }
 
 // usageEnd returns when the newest reading of energy use ends, or the zero time if there is none.
 func (s *Store) usageEnd() time.Time {
 	var end time.Time
 
-	for m := range usageColors {
-		for _, series := range s.Series[m] {
-			if p, ok := series.Last(); ok && p.At.Add(usageStep).After(end) {
-				end = p.At.Add(usageStep)
-			}
+	for _, u := range s.usage() {
+		if p, ok := u.series.Last(); ok && p.At.Add(usageStep).After(end) {
+			end = p.At.Add(usageStep)
 		}
 	}
 
