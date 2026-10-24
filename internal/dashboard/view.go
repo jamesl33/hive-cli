@@ -248,9 +248,7 @@ func (s *Store) usageCorner(now time.Time) string {
 	end := s.usageEnd()
 	behind := max(now.Sub(end), 0)
 
-	text := fmt.Sprintf("%dd · to %s · %s behind", usageSpan/(24*time.Hour), end.Local().Format("Mon 15:04"), formatWindow(behind))
-
-	return lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Render(text)
+	return lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Render(formatWindow(behind) + " behind")
 }
 
 // renderUsage draws a line for each fuel of the energy used in each half hour over usageSpan up to the
