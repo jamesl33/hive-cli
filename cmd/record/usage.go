@@ -59,19 +59,29 @@ func (o meterOptions) client(key string) (*octopus.Client, error) {
 	return &c, nil
 }
 
-// usageLoop records the energy used until the context is cancelled. A failed fetch is retried at the
-// next one.
+// usageLoop records the energy used until the context is cancelled. A failed load of the history or
+// fetch is retried at the next one, and nothing is fetched until the history has loaded, so that half
+// hours already recorded aren't added again.
 func usageLoop(ctx context.Context, c *octopus.Client, log *dashboard.Log, dir string) {
-	after, err := latestUsage(dir, metric(c.Fuel))
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-	}
+	var (
+		after  time.Time
+		err    error
+		loaded bool
+	)
 
 	t := time.NewTicker(usageEvery)
 	defer t.Stop()
 
 	for {
-		after, err = recordUsage(ctx, c, log, after)
+		if !loaded {
+			after, err = latestUsage(dir, metric(c.Fuel))
+			loaded = err == nil
+		}
+
+		if loaded {
+			after, err = recordUsage(ctx, c, log, after)
+		}
+
 		if err != nil && ctx.Err() == nil {
 			fmt.Fprintln(os.Stderr, err)
 		}
