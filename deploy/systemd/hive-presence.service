@@ -24,7 +24,8 @@ NoNewPrivileges=yes
 ProtectKernelTunables=yes
 ProtectKernelModules=yes
 ProtectControlGroups=yes
-RestrictAddressFamilies=AF_INET AF_PACKET
+# AF_BLUETOOTH: libpcap probes it while listing interfaces
+RestrictAddressFamilies=AF_INET AF_NETLINK AF_PACKET AF_BLUETOOTH
 RestrictNamespaces=yes
 LockPersonality=yes
 CapabilityBoundingSet=CAP_NET_RAW
