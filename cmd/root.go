@@ -5,6 +5,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/jamesl33/hive-cli/cmd/analyze"
 	"github.com/jamesl33/hive-cli/cmd/boost"
 	"github.com/jamesl33/hive-cli/cmd/dashboard"
 	"github.com/jamesl33/hive-cli/cmd/manual"
@@ -63,6 +64,7 @@ func init() {
 	)
 
 	rootCommand.AddCommand(
+		analyze.NewAnalyze(),
 		boost.NewBoost(&options),
 		dashboard.NewDashboard(&options),
 		manual.NewManual(&options),
