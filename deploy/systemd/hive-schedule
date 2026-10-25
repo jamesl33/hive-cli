@@ -1,15 +1,22 @@
 #!/bin/sh
 # Set the Hive thermostat to whatever the schedule says for right now.
 #
-# Reads "HH:MM <temp|off>" lines from $HIVE_SCHEDULE (default /etc/hive/schedule), picks the latest
+# Reads "HH:MM <temp|off>" lines from $HIVE_SCHEDULE_WEEKDAY (default /etc/hive/schedule.weekday), or on
+# Saturday and Sunday from $HIVE_SCHEDULE_WEEKEND (default /etc/hive/schedule.weekend) when that
+# file exists. Picks the latest
 # slot at or before the current time (wrapping to the last slot of the day before midnight's first
 # slot), then runs 'hive manual <temp>' or 'hive off'. Running it twice is harmless, so it is safe
 # to call from a timer, after a reboot, or by hand.
 
 set -eu
 
-schedule=${HIVE_SCHEDULE:-/etc/hive/schedule}
+schedule=${HIVE_SCHEDULE_WEEKDAY:-/etc/hive/schedule.weekday}
+weekend=${HIVE_SCHEDULE_WEEKEND:-/etc/hive/schedule.weekend}
 now=$(date +%H%M)
+
+if [ "$(date +%u)" -ge 6 ] && [ -r "$weekend" ]; then
+	schedule=$weekend
+fi
 
 current=""
 last=""

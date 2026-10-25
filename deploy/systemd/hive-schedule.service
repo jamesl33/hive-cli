@@ -11,7 +11,7 @@ StartLimitBurst=30
 [Service]
 Type=oneshot
 EnvironmentFile=-/etc/hive/env
-Environment=HIVE_SCHEDULE=/etc/hive/schedule
+Environment=HIVE_SCHEDULE_WEEKDAY=/etc/hive/schedule.weekday HIVE_SCHEDULE_WEEKEND=/etc/hive/schedule.weekend
 ExecStart=/usr/local/bin/hive-schedule
 Restart=on-failure
 RestartSec=30s

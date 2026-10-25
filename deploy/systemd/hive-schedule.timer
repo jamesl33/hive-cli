@@ -2,7 +2,7 @@
 Description=Heating schedule slots for the Hive thermostat
 
 [Timer]
-# Every 15 minutes, so slots in /etc/hive/schedule must fall on :00, :15, :30 or :45. Times are the Pi's local time zone.
+# Every 15 minutes, so slots in /etc/hive/schedule.* must fall on :00, :15, :30 or :45. Times are the Pi's local time zone.
 OnCalendar=*:00,15,30,45:00
 AccuracySec=30s
 # If the Pi was off when a slot passed, run once at boot. The script works out the current slot
