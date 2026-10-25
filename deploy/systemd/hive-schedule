@@ -7,12 +7,27 @@
 # slot at or before the current time (wrapping to the last slot of the day before midnight's first
 # slot), then runs 'hive manual <temp>' or 'hive off'. Running it twice is harmless, so it is safe
 # to call from a timer, after a reboot, or by hand.
+#
+# When HIVE_AWAY_MAC is set and hive-presence hasn't seen it for HIVE_AWAY_AFTER seconds (default
+# 1800), temps above HIVE_AWAY_FLOOR (default 14) are lowered to it. 'off' slots stay off.
 
 set -eu
 
 schedule=${HIVE_SCHEDULE_WEEKDAY:-/etc/hive/schedule.weekday}
 weekend=${HIVE_SCHEDULE_WEEKEND:-/etc/hive/schedule.weekend}
+presence=${HIVE_PRESENCE_FILE:-/var/lib/hive/away-last-seen}
+floor=${HIVE_AWAY_FLOOR:-14}
+away_after=${HIVE_AWAY_AFTER:-1800}
 now=$(date +%H%M)
+
+# Away when hive-presence has not seen $HIVE_AWAY_MAC for $away_after seconds. A missing file
+# counts as home, so a broken probe never cools the house.
+is_away() {
+	[ -n "${HIVE_AWAY_MAC:-}" ] || return 1
+	[ -e "$presence" ] || return 1
+	seen=$(stat -c %Y "$presence") || return 1
+	[ $(($(date +%s) - seen)) -gt "$away_after" ]
+}
 
 if [ "$(date +%u)" -ge 6 ] && [ -r "$weekend" ]; then
 	schedule=$weekend
@@ -53,6 +68,11 @@ fi
 if [ -z "$current" ]; then
 	current=$last
 	current_slot=$last_slot
+fi
+
+if [ "$current" != "off" ] && is_away && awk -v t="$current" -v f="$floor" 'BEGIN { exit !(t + 0 > f + 0) }'; then
+	echo "hive-schedule: away, $current_slot slot wanted ${current}°C"
+	current=$floor
 fi
 
 if [ "$current" = "off" ]; then

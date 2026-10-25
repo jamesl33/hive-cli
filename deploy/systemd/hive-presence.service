@@ -1,0 +1,31 @@
+[Unit]
+Description=Record whether the phone is on the local network
+Documentation=https://github.com/jamesl33/hive-cli/tree/master/deploy/systemd
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/etc/hive/env
+ExecStart=/usr/local/bin/hive-presence
+TimeoutStartSec=1min
+SuccessExitStatus=3
+# Exit 3 means the phone just came back; the + runs this outside the hardening below
+ExecStopPost=+/bin/sh -c '[ "$EXIT_STATUS" != 3 ] || systemctl start --no-block hive-schedule.service'
+
+# Hardening: it only needs raw ARP and to write the last-seen file
+User=hive
+ProtectSystem=strict
+ReadWritePaths=/var/lib/hive
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+NoNewPrivileges=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_PACKET
+RestrictNamespaces=yes
+LockPersonality=yes
+CapabilityBoundingSet=CAP_NET_RAW
+AmbientCapabilities=CAP_NET_RAW

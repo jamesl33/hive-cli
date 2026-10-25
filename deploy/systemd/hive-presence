@@ -1,0 +1,33 @@
+#!/bin/sh
+# Record that the phone is home: touch $HIVE_PRESENCE_FILE (default /var/lib/hive/away-last-seen) when
+# $HIVE_AWAY_MAC answers an ARP scan of the local network. hive-schedule treats a file older than
+# $HIVE_AWAY_AFTER as away. Does nothing unless HIVE_AWAY_MAC is set.
+#
+# If the scan itself fails the phone can't be told apart from absent, so it counts as home and the
+# script fails loudly rather than letting the house cool.
+
+set -eu
+
+mac=${HIVE_AWAY_MAC:-}
+presence=${HIVE_PRESENCE_FILE:-/var/lib/hive/away-last-seen}
+away_after=${HIVE_AWAY_AFTER:-1800}
+
+[ -n "$mac" ] || exit 0
+
+if ! scan=$(arp-scan --localnet); then
+	touch "$presence"
+	echo "hive-presence: arp-scan failed, assuming home" >&2
+	exit 1
+fi
+
+echo "$scan" | grep -qi "$mac" || exit 0
+
+# Coming back from away: exit 3 so hive-presence.service restarts the schedule now, not at the next slot
+returning=0
+if [ -e "$presence" ]; then
+	seen=$(stat -c %Y "$presence")
+	[ $(($(date +%s) - seen)) -le "$away_after" ] || returning=1
+fi
+
+touch "$presence"
+[ "$returning" -eq 0 ] || exit 3

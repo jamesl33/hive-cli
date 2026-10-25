@@ -30,6 +30,10 @@ Runs a heating schedule on the Pi: `hive-schedule.timer` fires every 15 minutes,
 
 `install.sh` seeds `/etc/hive/schedule.weekend` as a copy of the example; edit it for a different weekend. It replaces `schedule.weekday` all day Saturday and Sunday, and is optional (delete it to use the weekday schedule). Make the last slot of each file match so the changeover at midnight doesn't jump.
 
+## Away floor
+
+Set `HIVE_AWAY_MAC` in `/etc/hive/env` to your phone's Wi-Fi MAC (Android's per-network randomized one is stable) and install `arp-scan`. `hive-presence.timer` scans every 5 minutes and touches `/var/lib/hive/away-last-seen` when the phone answers. Once it has been unseen for `HIVE_AWAY_AFTER` seconds (default 1800), `hive-schedule` lowers any slot above `HIVE_AWAY_FLOOR` (default 14) to it; `off` slots stay off. When the phone reappears, `hive-presence` starts `hive-schedule` at once (within 5 minutes of your return) instead of waiting for the next slot. A missing file or failed scan counts as home.
+
 ## History
 
 `hive-record.service` runs `hive record`, writing to `/var/lib/hive` for `hive dashboard --history /var/lib/hive`. It is built to go easy on the SD card:

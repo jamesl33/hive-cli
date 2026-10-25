@@ -30,12 +30,18 @@ id hive >/dev/null 2>&1 || useradd --system --no-create-home --shell /usr/sbin/n
 install -d -m 755 -o hive -g hive /var/lib/hive
 install -m 644 hive-record.service /etc/systemd/system/hive-record.service
 
+install -m 755 hive-presence /usr/local/bin/hive-presence
+install -m 644 hive-presence.service /etc/systemd/system/hive-presence.service
+install -m 644 hive-presence.timer /etc/systemd/system/hive-presence.timer
+command -v arp-scan >/dev/null 2>&1 || echo "arp-scan not found; install it for HIVE_AWAY_MAC to work" >&2
+
 # Make time-sync.target wait for a real NTP sync rather than being reached immediately
 systemctl enable --now systemd-time-wait-sync.service 2>/dev/null || true
 
 systemctl daemon-reload
 systemctl enable --now hive-schedule.timer
 systemctl enable --now hive-record.service
+systemctl enable --now hive-presence.timer
 
 # Apply the current slot straight away
 systemctl start hive-schedule.service
