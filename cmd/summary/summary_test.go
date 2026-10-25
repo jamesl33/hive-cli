@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/jamesl33/hive-cli/internal/dashboard"
+	"github.com/jamesl33/hive-cli/internal/history"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -15,7 +16,7 @@ func TestWriteFooterAlignsFuels(t *testing.T) {
 		SpreadMax:  3.9,
 		BoilerOn:   3*time.Hour + 16*time.Minute,
 		BoilerRuns: 6,
-		Fuels:      map[dashboard.Metric]float64{dashboard.Gas: 24.5, dashboard.Electricity: 0.3},
+		Fuels:      map[history.Metric]float64{history.Gas: 24.5, history.Electricity: 0.3},
 	}
 
 	var buf bytes.Buffer

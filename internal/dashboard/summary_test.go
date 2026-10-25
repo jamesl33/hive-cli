@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jamesl33/hive-cli/internal/history"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -13,15 +14,15 @@ func TestSummarize(t *testing.T) {
 	to := from.Add(4 * time.Hour)
 	h := func(n int) time.Time { return from.Add(time.Duration(n) * time.Hour) }
 
-	samples := []Sample{
-		sample("lounge", Temperature, h(-1), 16), // Before the period: the starting value
-		sample("office", Temperature, h(0), 18),
-		sample("outdoors", Temperature, h(0), 8),
-		sample("hive", Boiler, h(1), BoilerOn),
-		sample("lounge", Temperature, h(2), 17),
-		sample("office", Temperature, h(2), 17),
-		sample("hive", Boiler, h(2), BoilerIdle),
-		sample("hive", Boiler, h(3), BoilerOn),
+	samples := []history.Sample{
+		sample("lounge", history.Temperature, h(-1), 16), // Before the period: the starting value
+		sample("office", history.Temperature, h(0), 18),
+		sample("outdoors", history.Temperature, h(0), 8),
+		sample("hive", history.Boiler, h(1), history.BoilerOn),
+		sample("lounge", history.Temperature, h(2), 17),
+		sample("office", history.Temperature, h(2), 17),
+		sample("hive", history.Boiler, h(2), history.BoilerIdle),
+		sample("hive", history.Boiler, h(3), history.BoilerOn),
 	}
 
 	got := Summarize(samples, "outdoors", from, to)
@@ -45,15 +46,15 @@ func TestSummarizeSumsFuelsInThePeriod(t *testing.T) {
 	from := day1.Truncate(24 * time.Hour)
 	to := from.Add(4 * time.Hour)
 
-	samples := []Sample{
-		sample("gas", Gas, from.Add(-30*time.Minute), 9), // Before the period
-		sample("gas", Gas, from, 0.5),
-		sample("gas", Gas, from.Add(30*time.Minute), 0.5), // A repeat is a separate half hour
-		sample("electricity", Electricity, from.Add(time.Hour), 0.25),
-		sample("gas", Gas, to.Add(time.Hour), 9), // After the period
+	samples := []history.Sample{
+		sample("gas", history.Gas, from.Add(-30*time.Minute), 9), // Before the period
+		sample("gas", history.Gas, from, 0.5),
+		sample("gas", history.Gas, from.Add(30*time.Minute), 0.5), // A repeat is a separate half hour
+		sample("electricity", history.Electricity, from.Add(time.Hour), 0.25),
+		sample("gas", history.Gas, to.Add(time.Hour), 9), // After the period
 	}
 
 	got := Summarize(samples, "outdoors", from, to)
 
-	assert.Equal(t, map[Metric]float64{Gas: 1, Electricity: 0.25}, got.Fuels)
+	assert.Equal(t, map[history.Metric]float64{history.Gas: 1, history.Electricity: 0.25}, got.Fuels)
 }

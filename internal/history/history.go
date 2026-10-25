@@ -1,4 +1,4 @@
-package dashboard
+package history
 
 import (
 	"bufio"
@@ -183,7 +183,7 @@ func (l *Log) Add(s Sample) {
 
 	// Energy used is not a state: a repeated value is another half hour, and is kept, and not carried
 	// into the next day, as each half hour is recorded
-	_, usage := usageColors[s.Metric]
+	usage := IsUsage(s.Metric)
 
 	old, ok := l.last[k]
 	if ok && old == steps && !usage {

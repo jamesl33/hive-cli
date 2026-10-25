@@ -9,16 +9,17 @@ import (
 	"github.com/NimbleMarkets/ntcharts/linechart/timeserieslinechart"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/jamesl33/hive-cli/internal/history"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestStoreKeepsUsageOutOfDevices(t *testing.T) {
 	s := NewStore(receiver)
-	s.add(Sample{Device: "gas", Metric: Gas, At: time.Now(), Value: 0.5})
+	s.add(history.Sample{Device: "gas", Metric: history.Gas, At: time.Now(), Value: 0.5})
 
 	assert.Empty(t, s.Order)
-	assert.Len(t, s.Series[Gas]["gas"], 1)
+	assert.Len(t, s.Series[history.Gas]["gas"], 1)
 	assert.True(t, s.hasUsage())
 }
 
@@ -28,7 +29,7 @@ func TestUsageEndAndCorner(t *testing.T) {
 	s := NewStore(receiver)
 	assert.True(t, s.usageEnd().IsZero())
 
-	s.add(Sample{Device: "gas", Metric: Gas, At: now.Add(-25 * time.Hour), Value: 0.5})
+	s.add(history.Sample{Device: "gas", Metric: history.Gas, At: now.Add(-25 * time.Hour), Value: 0.5})
 
 	assert.Equal(t, now.Add(-25*time.Hour+usageStep), s.usageEnd())
 	assert.Contains(t, s.usageCorner(now), "24h behind")
@@ -38,9 +39,9 @@ func TestFuelsSumsTheWindow(t *testing.T) {
 	now := time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
 
 	s := NewStore(receiver)
-	s.add(Sample{Device: "gas", Metric: Gas, At: now.Add(-3 * time.Hour), Value: 9})
-	s.add(Sample{Device: "gas", Metric: Gas, At: now.Add(-2 * usageStep), Value: 0.5})
-	s.add(Sample{Device: "gas", Metric: Gas, At: now.Add(-usageStep), Value: 0.5})
+	s.add(history.Sample{Device: "gas", Metric: history.Gas, At: now.Add(-3 * time.Hour), Value: 9})
+	s.add(history.Sample{Device: "gas", Metric: history.Gas, At: now.Add(-2 * usageStep), Value: 0.5})
+	s.add(history.Sample{Device: "gas", Metric: history.Gas, At: now.Add(-usageStep), Value: 0.5})
 
 	assert.Contains(t, s.fuels(now.Add(-90*time.Minute), nil), "gas 1.0 kWh")
 	assert.Contains(t, s.fuels(now.Add(-4*time.Hour), nil), "gas 10.0 kWh")
@@ -52,24 +53,24 @@ func TestUsageOutsideWindowIsBlank(t *testing.T) {
 	now := time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
 
 	s := NewStore(receiver)
-	s.add(Sample{Device: "gas", Metric: Gas, At: now.Add(-25 * time.Hour), Value: 0.5})
+	s.add(history.Sample{Device: "gas", Metric: history.Gas, At: now.Add(-25 * time.Hour), Value: 0.5})
 
 	empty := NewStore(receiver)
-	empty.add(Sample{Device: "gas", Metric: Gas, At: now.Add(-25 * time.Hour), Value: 0})
+	empty.add(history.Sample{Device: "gas", Metric: history.Gas, At: now.Add(-25 * time.Hour), Value: 0})
 
 	from := now.Add(-time.Hour)
 
 	assert.Equal(t, empty.renderUsage(98, 6, from, now, nil), s.renderUsage(98, 6, from, now, nil))
-	assert.Empty(t, current(s.Series[Gas]["gas"], from))
+	assert.Empty(t, current(s.Series[history.Gas]["gas"], from))
 }
 
 func TestFuelKeysHideFuels(t *testing.T) {
 	store := NewStore(receiver)
 	now := time.Now()
 
-	store.add(Sample{Device: "hall", Metric: Temperature, At: now.Add(-time.Hour), Value: 18})
-	store.add(Sample{Device: "gas", Metric: Gas, At: now.Add(-30 * time.Hour), Value: 0.5})
-	store.add(Sample{Device: "electricity", Metric: Electricity, At: now.Add(-30 * time.Hour), Value: 0.2})
+	store.add(history.Sample{Device: "hall", Metric: history.Temperature, At: now.Add(-time.Hour), Value: 18})
+	store.add(history.Sample{Device: "gas", Metric: history.Gas, At: now.Add(-30 * time.Hour), Value: 0.5})
+	store.add(history.Sample{Device: "electricity", Metric: history.Electricity, At: now.Add(-30 * time.Hour), Value: 0.2})
 
 	m := New(t.Context(), feed{}, store)
 	next, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
@@ -89,11 +90,11 @@ func TestViewShowsUsage(t *testing.T) {
 	store := NewStore(receiver)
 	now := time.Now()
 
-	store.add(Sample{Device: "hall", Metric: Temperature, At: now.Add(-time.Hour), Value: 18})
+	store.add(history.Sample{Device: "hall", Metric: history.Temperature, At: now.Add(-time.Hour), Value: 18})
 
 	for i := range 48 {
 		at := now.Add(-48*time.Hour + time.Duration(i)*usageStep)
-		store.add(Sample{Device: "gas", Metric: Gas, At: at, Value: float64(i%6) / 4})
+		store.add(history.Sample{Device: "gas", Metric: history.Gas, At: at, Value: float64(i%6) / 4})
 	}
 
 	m := New(t.Context(), feed{}, store)
@@ -130,9 +131,9 @@ func TestViewPutsHumidityBelowTemperature(t *testing.T) {
 	store := NewStore(receiver)
 	now := time.Now()
 
-	store.add(Sample{Device: "hall", Metric: Temperature, At: now.Add(-time.Hour), Value: 18})
-	store.add(Sample{Device: "hall", Metric: Humidity, At: now.Add(-time.Hour), Value: 55})
-	store.add(Sample{Device: "gas", Metric: Gas, At: now.Add(-30 * time.Hour), Value: 0.5})
+	store.add(history.Sample{Device: "hall", Metric: history.Temperature, At: now.Add(-time.Hour), Value: 18})
+	store.add(history.Sample{Device: "hall", Metric: history.Humidity, At: now.Add(-time.Hour), Value: 55})
+	store.add(history.Sample{Device: "gas", Metric: history.Gas, At: now.Add(-30 * time.Hour), Value: 0.5})
 
 	m := New(t.Context(), feed{}, store)
 	next, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
@@ -156,9 +157,9 @@ func TestViewFitsUsageAtMinHeight(t *testing.T) {
 	store := NewStore(receiver)
 	now := time.Now()
 
-	store.add(Sample{Device: "hall", Metric: Temperature, At: now, Value: 18})
-	store.add(Sample{Device: "hall", Metric: Humidity, At: now, Value: 55})
-	store.add(Sample{Device: "gas", Metric: Gas, At: now.Add(-30 * time.Hour), Value: 0.5})
+	store.add(history.Sample{Device: "hall", Metric: history.Temperature, At: now, Value: 18})
+	store.add(history.Sample{Device: "hall", Metric: history.Humidity, At: now, Value: 55})
+	store.add(history.Sample{Device: "gas", Metric: history.Gas, At: now.Add(-30 * time.Hour), Value: 0.5})
 
 	m := New(t.Context(), feed{}, store)
 	next, _ := m.Update(tea.WindowSizeMsg{Width: minWidth, Height: minHeight})
@@ -211,9 +212,9 @@ func TestClimateFitsMinSizeWithBatteries(t *testing.T) {
 	now := time.Now()
 
 	for _, device := range []string{"a", "b", "c", "d", "e", "f"} {
-		store.add(Sample{Device: device, Metric: Temperature, At: now, Value: 18})
-		store.add(Sample{Device: device, Metric: Humidity, At: now, Value: 55})
-		store.add(Sample{Device: device, Metric: Battery, At: now, Value: 10})
+		store.add(history.Sample{Device: device, Metric: history.Temperature, At: now, Value: 18})
+		store.add(history.Sample{Device: device, Metric: history.Humidity, At: now, Value: 55})
+		store.add(history.Sample{Device: device, Metric: history.Battery, At: now, Value: 10})
 	}
 
 	m := New(t.Context(), feed{}, store)
@@ -233,7 +234,7 @@ func TestClimateFitsMinSizeWithBatteries(t *testing.T) {
 
 func TestFuelsWithoutUsage(t *testing.T) {
 	store := NewStore(receiver)
-	store.add(Sample{Device: "hall", Metric: Temperature, At: time.Now(), Value: 18})
+	store.add(history.Sample{Device: "hall", Metric: history.Temperature, At: time.Now(), Value: 18})
 
 	next, _ := New(t.Context(), feed{}, store).Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	next, _ = next.Update(tea.KeyMsg{Type: tea.KeyTab})
@@ -243,7 +244,7 @@ func TestFuelsWithoutUsage(t *testing.T) {
 
 func TestTabRedrawsCachedView(t *testing.T) {
 	store := NewStore(receiver)
-	store.add(Sample{Device: "hall", Metric: Temperature, At: time.Now(), Value: 18})
+	store.add(history.Sample{Device: "hall", Metric: history.Temperature, At: time.Now(), Value: 18})
 
 	next, _ := New(t.Context(), feed{}, store).Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	assert.Contains(t, next.View(), "Temperature")

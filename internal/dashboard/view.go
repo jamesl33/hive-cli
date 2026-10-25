@@ -13,6 +13,7 @@ import (
 	"github.com/NimbleMarkets/ntcharts/linechart"
 	"github.com/NimbleMarkets/ntcharts/linechart/timeserieslinechart"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/jamesl33/hive-cli/internal/history"
 )
 
 const (
@@ -43,7 +44,7 @@ const (
 )
 
 // usageColors are the metrics of energy used, which the usage chart draws, with their colours.
-var usageColors = map[Metric]lipgloss.Color{Gas: "214", Electricity: "39"}
+var usageColors = map[history.Metric]lipgloss.Color{history.Gas: "214", history.Electricity: "39"}
 
 // palette is the colours of the devices, in the order of their names.
 var palette = []lipgloss.Color{"39", "208", "42", "205", "220", "141", "51", "203"}
@@ -89,11 +90,11 @@ func renderStrip(strip []float64) string {
 
 	for _, v := range strip {
 		switch v {
-		case BoilerOn:
+		case history.BoilerOn:
 			b.WriteString(boilerOn)
-		case BoilerIdle:
+		case history.BoilerIdle:
 			b.WriteString(boilerIdle)
-		case BoilerOff:
+		case history.BoilerOff:
 			b.WriteString(boilerOff)
 		default:
 			b.WriteString(boilerUnknown)
@@ -156,12 +157,12 @@ type chart struct {
 
 // renderChart draws a line for each device which has samples of the metric, except the devices which
 // are hidden.
-func (s *Store) renderChart(metric Metric, hide map[string]bool, w, h int, from, to time.Time) chart {
+func (s *Store) renderChart(metric history.Metric, hide map[string]bool, w, h int, from, to time.Time) chart {
 	byDevice := maps.Clone(s.Series[metric])
 	targets := map[string]Series{}
 
-	if metric == Temperature {
-		targets = maps.Clone(s.Series[Target])
+	if metric == history.Temperature {
+		targets = maps.Clone(s.Series[history.Target])
 	}
 
 	for device, hidden := range hide {
@@ -299,13 +300,6 @@ const (
 	brailleFull  = '⣿'
 )
 
-// isUsage returns whether the metric is energy used, which is drawn on the usage chart.
-func isUsage(m Metric) bool {
-	_, ok := usageColors[m]
-
-	return ok
-}
-
 // hasUsage returns whether any energy use has been recorded.
 func (s *Store) hasUsage() bool {
 	return len(s.usage()) > 0
@@ -334,7 +328,7 @@ func (s *Store) usageCorner(now time.Time) string {
 }
 
 // fuelKeys are the keys which show or hide the fuels.
-var fuelKeys = map[Metric]string{Gas: "g", Electricity: "e"}
+var fuelKeys = map[history.Metric]string{history.Gas: "g", history.Electricity: "e"}
 
 // fuels lists each fuel with its key, colour and the energy used after the time, in kWh; one hidden from
 // the usage chart is struck through.
@@ -351,7 +345,7 @@ func (s *Store) fuels(from time.Time, hide map[string]bool) string {
 
 // meter is the readings of energy used from one device.
 type meter struct {
-	metric Metric
+	metric history.Metric
 	device string
 	series Series
 }
@@ -368,7 +362,7 @@ func (s *Store) usage() []meter {
 }
 
 // meters returns the readings of each device of the metric, in the order of their name.
-func (s *Store) meters(metric Metric) []meter {
+func (s *Store) meters(metric history.Metric) []meter {
 	var meters []meter
 
 	for _, device := range slices.Sorted(maps.Keys(s.Series[metric])) {
@@ -516,7 +510,7 @@ func boilerOnTime(s Series, from, to time.Time) time.Duration {
 	s = visible(s, from)
 
 	for i, p := range s {
-		if p.Value != BoilerOn {
+		if p.Value != history.BoilerOn {
 			continue
 		}
 
@@ -694,7 +688,7 @@ func (s *Store) legend(now time.Time, hide map[string]bool) string {
 	for i, device := range s.Order {
 		text := device
 
-		if p, ok := s.Series[Temperature][device].Last(); ok {
+		if p, ok := s.Series[history.Temperature][device].Last(); ok {
 			text += fmt.Sprintf(" %.1f°C", p.Value)
 		}
 
@@ -714,7 +708,7 @@ func (s *Store) legend(now time.Time, hide map[string]bool) string {
 
 		part := style.Render(key + "● " + text)
 
-		if p, ok := s.Series[Target][device].Last(); ok {
+		if p, ok := s.Series[history.Target][device].Last(); ok {
 			targetStyle := lipgloss.NewStyle().Foreground(targetColor).Strikethrough(hide[device])
 			if stale {
 				targetStyle = style
@@ -725,7 +719,7 @@ func (s *Store) legend(now time.Time, hide map[string]bool) string {
 
 		text = ""
 
-		if p, ok := s.Series[Humidity][device].Last(); ok {
+		if p, ok := s.Series[history.Humidity][device].Last(); ok {
 			text += fmt.Sprintf(" %.0f%%", p.Value)
 		}
 
@@ -742,7 +736,7 @@ func (s *Store) legend(now time.Time, hide map[string]bool) string {
 // gap returns the signed difference between the temperature of the device and the target, e.g. ", +0.4",
 // or nothing if it has no temperature.
 func (s *Store) gap(device string, target float64) string {
-	p, ok := s.Series[Temperature][device].Last()
+	p, ok := s.Series[history.Temperature][device].Last()
 	if !ok {
 		return ""
 	}
@@ -758,12 +752,12 @@ func (s *Store) batteries() []string {
 	low := false
 
 	width := 0
-	for device := range s.Series[Battery] {
+	for device := range s.Series[history.Battery] {
 		width = max(width, lipgloss.Width(device))
 	}
 
 	for i, device := range s.Order {
-		p, ok := s.Series[Battery][device].Last()
+		p, ok := s.Series[history.Battery][device].Last()
 		if !ok {
 			continue
 		}
@@ -783,7 +777,7 @@ func (s *Store) batteries() []string {
 
 // boilerRows draws the boiler state across the width, with a key.
 func (s *Store) boilerRows(width int, from, to time.Time) []string {
-	strip := Strip(s.Series[Boiler][s.Receiver.Name], from, to, width)
+	strip := Strip(s.Series[history.Boiler][s.Receiver.Name], from, to, width)
 
 	key := fmt.Sprintf("Boiler  %s on  %s idle  %s off", boilerOn, boilerIdle, boilerOff)
 

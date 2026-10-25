@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/jamesl33/hive-cli/internal/dashboard"
+	"github.com/jamesl33/hive-cli/internal/history"
 	"github.com/jamesl33/hive-cli/internal/octopus"
 	"github.com/jamesl33/hive-cli/internal/z2m"
 	"github.com/spf13/cobra"
@@ -46,7 +47,7 @@ func NewRecord(options *z2m.Options) *cobra.Command {
 	cmd.Flags().StringVar(
 		&r.dir,
 		"history",
-		z2m.Env("HIVE_HISTORY", dashboard.DefaultDir()),
+		z2m.Env("HIVE_HISTORY", history.DefaultDir()),
 		"directory to record history in (HIVE_HISTORY)",
 	)
 
@@ -104,7 +105,7 @@ func (r *Record) meters() ([]*octopus.Client, error) {
 
 // Run records history until the context is cancelled.
 func (r *Record) Run(ctx context.Context) error {
-	log, err := dashboard.OpenLog(r.dir)
+	log, err := history.OpenLog(r.dir)
 	if err != nil {
 		return fmt.Errorf("failed to open history: %w", err)
 	}
@@ -140,7 +141,7 @@ func (r *Record) Run(ctx context.Context) error {
 }
 
 // consume adds the measurements in the feed to the log until the context is cancelled or the feed fails.
-func consume(ctx context.Context, feed *z2m.Feed, log *dashboard.Log) error {
+func consume(ctx context.Context, feed *z2m.Feed, log *history.Log) error {
 	reports := dashboard.NewReports(feed.Receiver)
 
 	for {
@@ -160,7 +161,7 @@ func consume(ctx context.Context, feed *z2m.Feed, log *dashboard.Log) error {
 }
 
 // flushLoop writes the history to disk regularly, and on SIGUSR1, until the context is cancelled.
-func flushLoop(ctx context.Context, log *dashboard.Log) {
+func flushLoop(ctx context.Context, log *history.Log) {
 	t := time.NewTicker(flushEvery)
 	defer t.Stop()
 

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jamesl33/hive-cli/internal/dashboard"
+	"github.com/jamesl33/hive-cli/internal/history"
 	"github.com/jamesl33/hive-cli/internal/octopus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -29,7 +29,7 @@ func TestRecordUsage(t *testing.T) {
 
 	dir := t.TempDir()
 
-	log, err := dashboard.OpenLog(dir)
+	log, err := history.OpenLog(dir)
 	require.NoError(t, err)
 
 	c := octopus.Client{BaseURL: srv.URL, Key: "k", Fuel: octopus.FuelGas, Point: "1", Serial: "2", Units: octopus.UnitsKWh}
@@ -46,15 +46,15 @@ func TestRecordUsage(t *testing.T) {
 	require.NoError(t, log.Flush(time.Now()))
 
 	// A repeated value is another half hour, so it is kept
-	samples, err := dashboard.Load(dir, start)
+	samples, err := history.Load(dir, start)
 	require.NoError(t, err)
 	require.Len(t, samples, 3)
-	assert.Equal(t, dashboard.Gas, samples[0].Metric)
+	assert.Equal(t, history.Gas, samples[0].Metric)
 	assert.Equal(t, 0.25, samples[0].Value)
 	assert.Equal(t, 0.5, samples[1].Value)
 	assert.Equal(t, 0.5, samples[2].Value)
 
-	latest, err := latestUsage(dir, dashboard.Gas)
+	latest, err := latestUsage(dir, history.Gas)
 	require.NoError(t, err)
 	assert.Equal(t, start.Add(time.Hour), latest)
 }
@@ -76,7 +76,7 @@ func TestRecordUsageOutOfOrder(t *testing.T) {
 
 	dir := t.TempDir()
 
-	log, err := dashboard.OpenLog(dir)
+	log, err := history.OpenLog(dir)
 	require.NoError(t, err)
 
 	c := octopus.Client{BaseURL: srv.URL, Key: "k", Fuel: octopus.FuelGas, Point: "1", Serial: "2", Units: octopus.UnitsKWh}
@@ -87,7 +87,7 @@ func TestRecordUsageOutOfOrder(t *testing.T) {
 
 	require.NoError(t, log.Flush(time.Now()))
 
-	samples, err := dashboard.Load(dir, start)
+	samples, err := history.Load(dir, start)
 	require.NoError(t, err)
 	require.Len(t, samples, 3)
 }
@@ -121,7 +121,7 @@ func TestRecordUsageElectricity(t *testing.T) {
 
 	dir := t.TempDir()
 
-	log, err := dashboard.OpenLog(dir)
+	log, err := history.OpenLog(dir)
 	require.NoError(t, err)
 
 	c := octopus.Client{BaseURL: srv.URL, Key: "k", Fuel: octopus.FuelElectricity, Point: "1", Serial: "2"}
@@ -130,10 +130,10 @@ func TestRecordUsageElectricity(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, log.Flush(time.Now()))
 
-	samples, err := dashboard.Load(dir, start)
+	samples, err := history.Load(dir, start)
 	require.NoError(t, err)
 	require.Len(t, samples, 1)
-	assert.Equal(t, dashboard.Electricity, samples[0].Metric)
+	assert.Equal(t, history.Electricity, samples[0].Metric)
 	assert.Equal(t, "electricity", samples[0].Device)
 	assert.Equal(t, 0.3, samples[0].Value)
 }

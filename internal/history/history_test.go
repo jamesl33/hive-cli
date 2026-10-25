@@ -1,4 +1,4 @@
-package dashboard
+package history
 
 import (
 	"os"
@@ -174,43 +174,4 @@ func TestLoadMissingDirectory(t *testing.T) {
 	got, err := Load(filepath.Join(t.TempDir(), "missing"), day1)
 	require.NoError(t, err)
 	assert.Empty(t, got)
-}
-
-func TestStoreRestoreAndReloadByWindow(t *testing.T) {
-	l, dir := openLog(t)
-
-	late := day1.Add(10 * 24 * time.Hour)
-
-	l.Add(sample("office", Temperature, day1, 19))
-	l.Add(sample("office", Temperature, late, 21))
-	require.NoError(t, l.Flush(late))
-
-	s := NewStore(receiver)
-	require.NoError(t, s.Restore(dir, late))
-
-	// Only the last day: the checkpoint which starts it, and the change
-	series := s.Series[Temperature]["office"]
-	require.Len(t, series, 2)
-	assert.Equal(t, 19.0, series[0].Value)
-	assert.Equal(t, 21.0, series[1].Value)
-	assert.Equal(t, []string{"office"}, s.Order)
-
-	// A wider window loads the first day too
-	require.NoError(t, s.Reload(day1))
-	assert.Len(t, s.Series[Temperature]["office"], 3)
-
-	// A sample which is not written yet survives a reload
-	s.add(sample("office", Temperature, late.Add(time.Hour), 22))
-	require.NoError(t, s.Reload(late))
-	assert.Len(t, s.Series[Temperature]["office"], 3)
-	assert.Equal(t, 22.0, s.Series[Temperature]["office"][2].Value)
-}
-
-func TestVisible(t *testing.T) {
-	s := Series{{At: day1, Value: 1}, {At: day1.Add(time.Hour), Value: 2}, {At: day1.Add(2 * time.Hour), Value: 3}}
-
-	assert.Equal(t, s, visible(s, day1.Add(-time.Hour)))
-	assert.Equal(t, s[1:], visible(s, day1.Add(90*time.Minute)))
-	assert.Equal(t, s[2:], visible(s, day1.Add(3*time.Hour)))
-	assert.Empty(t, visible(nil, day1))
 }

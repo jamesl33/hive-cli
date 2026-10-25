@@ -7,6 +7,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/jamesl33/hive-cli/internal/dashboard"
+	"github.com/jamesl33/hive-cli/internal/history"
 	"github.com/jamesl33/hive-cli/internal/z2m"
 	"github.com/spf13/cobra"
 )
@@ -33,7 +34,7 @@ func NewDashboard(options *z2m.Options) *cobra.Command {
 	cmd.Flags().StringVar(
 		&d.dir,
 		"history",
-		z2m.Env("HIVE_HISTORY", dashboard.DefaultDir()),
+		z2m.Env("HIVE_HISTORY", history.DefaultDir()),
 		"directory with the history written by 'hive record' (HIVE_HISTORY)",
 	)
 

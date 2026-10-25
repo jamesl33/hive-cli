@@ -4,52 +4,10 @@ import (
 	"slices"
 	"time"
 
+	"github.com/jamesl33/hive-cli/internal/history"
 	"github.com/jamesl33/hive-cli/internal/hive"
 	"github.com/jamesl33/hive-cli/internal/z2m"
 )
-
-// Metric is a kind of measurement.
-type Metric string
-
-// Metrics shown by the dashboard.
-const (
-	Temperature Metric = "temperature"
-	Humidity    Metric = "humidity"
-	Battery     Metric = "battery"
-	Boiler      Metric = "boiler"
-	Target      Metric = "target"
-
-	// Gas is the kWh of gas used in the half hour starting at the sample, from the smart meter. It is
-	// drawn on the usage chart. As with every metric a repeated value is dropped, so a half hour
-	// without a sample has the value of the one before.
-	Gas Metric = "gas"
-
-	// Electricity is the kWh of electricity used in the half hour starting at the sample, recorded
-	// like Gas.
-	Electricity Metric = "electricity"
-)
-
-// Values of the Boiler metric.
-const (
-	BoilerOff float64 = iota
-	BoilerIdle
-	BoilerOn
-)
-
-// Sample is a measurement from a device.
-type Sample struct {
-	// Device is the friendly name of the device.
-	Device string
-
-	// Metric is what was measured.
-	Metric Metric
-
-	// At is when the measurement was received.
-	At time.Time
-
-	// Value is the measurement; for the Boiler metric it is one of the Boiler* values.
-	Value float64
-}
 
 // Store holds everything shown by the dashboard.
 type Store struct {
@@ -63,7 +21,7 @@ type Store struct {
 	Order []string
 
 	// Series is the samples of each device, by metric.
-	Series map[Metric]map[string]Series
+	Series map[history.Metric]map[string]Series
 
 	// dir is where the history is loaded from, if any.
 	dir string
@@ -79,7 +37,7 @@ type Store struct {
 func NewStore(r hive.Receiver) *Store {
 	s := &Store{
 		Receiver: r,
-		Series:   make(map[Metric]map[string]Series),
+		Series:   make(map[history.Metric]map[string]Series),
 		reports:  NewReports(r),
 	}
 
@@ -97,7 +55,7 @@ func (s *Store) Apply(u z2m.Update) {
 // of from, and remembers the directory for Reload. Samples which are newer than the history, as they
 // are not written yet, are kept.
 func (s *Store) Restore(dir string, from time.Time) error {
-	samples, err := Load(dir, from)
+	samples, err := history.Load(dir, from)
 	if err != nil {
 		return err
 	}
@@ -110,7 +68,7 @@ func (s *Store) Restore(dir string, from time.Time) error {
 	live := s.after(newest)
 
 	s.dir = dir
-	s.Series = make(map[Metric]map[string]Series)
+	s.Series = make(map[history.Metric]map[string]Series)
 	s.version++
 
 	for _, sample := range append(samples, live...) {
@@ -121,8 +79,8 @@ func (s *Store) Restore(dir string, from time.Time) error {
 }
 
 // after returns the samples which are newer than the time, oldest first.
-func (s *Store) after(t time.Time) []Sample {
-	var samples []Sample
+func (s *Store) after(t time.Time) []history.Sample {
+	var samples []history.Sample
 
 	for metric, byDevice := range s.Series {
 		for device, series := range byDevice {
@@ -130,21 +88,21 @@ func (s *Store) after(t time.Time) []Sample {
 		}
 	}
 
-	slices.SortStableFunc(samples, func(a, b Sample) int { return a.At.Compare(b.At) })
+	slices.SortStableFunc(samples, func(a, b history.Sample) int { return a.At.Compare(b.At) })
 
 	return samples
 }
 
 // seriesAfter returns the points of a series which are newer than the time, as samples.
-func seriesAfter(series Series, t time.Time, device string, metric Metric) []Sample {
-	var samples []Sample
+func seriesAfter(series Series, t time.Time, device string, metric history.Metric) []history.Sample {
+	var samples []history.Sample
 
 	for _, p := range series {
 		if !p.At.After(t) {
 			continue
 		}
 
-		samples = append(samples, Sample{Device: device, Metric: metric, At: p.At, Value: p.Value})
+		samples = append(samples, history.Sample{Device: device, Metric: metric, At: p.At, Value: p.Value})
 	}
 
 	return samples
@@ -160,7 +118,7 @@ func (s *Store) Reload(from time.Time) error {
 }
 
 // add appends a sample to its series.
-func (s *Store) add(sample Sample) {
+func (s *Store) add(sample history.Sample) {
 	s.version++
 
 	if s.Series[sample.Metric] == nil {
@@ -171,7 +129,7 @@ func (s *Store) add(sample Sample) {
 	series[sample.Device] = series[sample.Device].Append(Point{At: sample.At, Value: sample.Value})
 
 	// Energy use comes from the meter, not a device, so it has no place in the legend or the keys
-	if isUsage(sample.Metric) {
+	if history.IsUsage(sample.Metric) {
 		return
 	}
 
@@ -197,7 +155,7 @@ func NewReports(r hive.Receiver) *Reports {
 }
 
 // Samples returns the measurements in a report.
-func (r *Reports) Samples(u z2m.Update) []Sample {
+func (r *Reports) Samples(u z2m.Update) []history.Sample {
 	if r.state[u.Device] == nil {
 		r.state[u.Device] = make(map[string]any)
 	}
@@ -211,19 +169,19 @@ func (r *Reports) Samples(u z2m.Update) []Sample {
 
 // Extract returns the measurements in a report. The state is every attribute the device has
 // reported, which the receiver needs to work out the state of the boiler.
-func Extract(r hive.Receiver, u z2m.Update, state map[string]any) []Sample {
+func Extract(r hive.Receiver, u z2m.Update, state map[string]any) []history.Sample {
 	if u.Device != r.Name {
-		return readings(u, Temperature, Humidity, Battery)
+		return readings(u, history.Temperature, history.Humidity, history.Battery)
 	}
 
-	samples := readings(u, Battery)
+	samples := readings(u, history.Battery)
 
 	return append(samples, receiverSamples(r, u, state)...)
 }
 
 // readings returns the metrics which the report contains, taken from the attribute of the same name.
-func readings(u z2m.Update, metrics ...Metric) []Sample {
-	var samples []Sample
+func readings(u z2m.Update, metrics ...history.Metric) []history.Sample {
+	var samples []history.Sample
 
 	for _, metric := range metrics {
 		v, ok := u.Payload[string(metric)].(float64)
@@ -231,31 +189,31 @@ func readings(u z2m.Update, metrics ...Metric) []Sample {
 			continue
 		}
 
-		samples = append(samples, Sample{Device: u.Device, Metric: metric, At: u.At, Value: v})
+		samples = append(samples, history.Sample{Device: u.Device, Metric: metric, At: u.At, Value: v})
 	}
 
 	return samples
 }
 
 // receiverSamples returns the room temperature, target and boiler state if the report changes them.
-func receiverSamples(r hive.Receiver, u z2m.Update, state map[string]any) []Sample {
-	var samples []Sample
+func receiverSamples(r hive.Receiver, u z2m.Update, state map[string]any) []history.Sample {
+	var samples []history.Sample
 
 	s := hive.Interpret(r, state)
 
 	if _, ok := u.Payload[r.Key("local_temperature")]; ok && s.Temperature != nil {
-		samples = append(samples, Sample{Device: u.Device, Metric: Temperature, At: u.At, Value: *s.Temperature})
+		samples = append(samples, history.Sample{Device: u.Device, Metric: history.Temperature, At: u.At, Value: *s.Temperature})
 	}
 
 	if _, ok := u.Payload[r.Key("occupied_heating_setpoint")]; ok && s.Target != nil {
-		samples = append(samples, Sample{Device: u.Device, Metric: Target, At: u.At, Value: *s.Target})
+		samples = append(samples, history.Sample{Device: u.Device, Metric: history.Target, At: u.At, Value: *s.Target})
 	}
 
 	_, mode := u.Payload[r.Key("system_mode")]
 	_, running := u.Payload[r.Key("running_state")]
 
 	if (mode || running) && s.Mode != hive.ModeUnknown {
-		samples = append(samples, Sample{Device: u.Device, Metric: Boiler, At: u.At, Value: boilerState(s)})
+		samples = append(samples, history.Sample{Device: u.Device, Metric: history.Boiler, At: u.At, Value: boilerState(s)})
 	}
 
 	return samples
@@ -264,12 +222,12 @@ func receiverSamples(r hive.Receiver, u z2m.Update, state map[string]any) []Samp
 // boilerState works out whether the boiler is off, idle or firing.
 func boilerState(s hive.State) float64 {
 	if s.Mode == hive.ModeOff {
-		return BoilerOff
+		return history.BoilerOff
 	}
 
 	if s.Active != nil && *s.Active {
-		return BoilerOn
+		return history.BoilerOn
 	}
 
-	return BoilerIdle
+	return history.BoilerIdle
 }

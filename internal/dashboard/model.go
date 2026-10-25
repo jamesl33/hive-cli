@@ -11,6 +11,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/jamesl33/hive-cli/internal/history"
 	"github.com/jamesl33/hive-cli/internal/z2m"
 )
 
@@ -207,9 +208,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "o":
 			m = m.toggle(m.store.Outdoors)
 		case "g":
-			m = m.toggle(string(Gas))
+			m = m.toggle(string(history.Gas))
 		case "e":
-			m = m.toggle(string(Electricity))
+			m = m.toggle(string(history.Electricity))
 		case "1", "2", "3", "4", "5", "6", "7", "8":
 			if i := int(msg.String()[0] - '1'); i < len(m.store.Order) {
 				m = m.toggle(m.store.Order[i])
@@ -398,7 +399,7 @@ func (m Model) drawClimate(now, from time.Time) []string {
 	// Besides the charts there are the legend row, the two boiler rows, the battery rows and the
 	// borders of each box. When the charts would get too short, the humidity and then the batteries
 	// are left off.
-	hasHumidity := len(m.store.Series[Humidity]) > 0
+	hasHumidity := len(m.store.Series[history.Humidity]) > 0
 	h := m.climateHeight(hasHumidity, len(batteries))
 
 	if h < minChartHeight*(1+boolInt(hasHumidity)) {
@@ -418,15 +419,15 @@ func (m Model) drawClimate(now, from time.Time) []string {
 		tempH = h - humH
 	}
 
-	temp := m.store.renderChart(Temperature, m.hidden, m.width-2, tempH, from, now)
+	temp := m.store.renderChart(history.Temperature, m.hidden, m.width-2, tempH, from, now)
 	rows = append(rows, box("Temperature °C", "", temp.view, m.width))
 
 	if hasHumidity {
-		humidity := m.store.renderChart(Humidity, m.hidden, m.width-2, humH, from, now)
+		humidity := m.store.renderChart(history.Humidity, m.hidden, m.width-2, humH, from, now)
 		rows = append(rows, box("Humidity %", "", humidity.view, m.width))
 	}
 
-	boiler := formatOn(boilerOnTime(m.store.Series[Boiler][m.store.Receiver.Name], from, now), windows[m.window])
+	boiler := formatOn(boilerOnTime(m.store.Series[history.Boiler][m.store.Receiver.Name], from, now), windows[m.window])
 	rows = append(rows, box("Boiler "+boiler, "", strings.Join(m.store.boilerRows(m.width-2, from, now), "\n"), m.width))
 
 	if len(batteries) > 0 {

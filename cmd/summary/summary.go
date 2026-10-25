@@ -9,6 +9,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/jamesl33/hive-cli/internal/dashboard"
+	"github.com/jamesl33/hive-cli/internal/history"
 	"github.com/jamesl33/hive-cli/internal/z2m"
 	"github.com/spf13/cobra"
 )
@@ -59,7 +60,7 @@ func NewSummary() *cobra.Command {
 	cmd.Flags().StringVar(
 		&s.dir,
 		"history",
-		z2m.Env("HIVE_HISTORY", dashboard.DefaultDir()),
+		z2m.Env("HIVE_HISTORY", history.DefaultDir()),
 		"directory history is recorded in (HIVE_HISTORY)",
 	)
 
@@ -103,7 +104,7 @@ func (s *Summary) Run(w io.Writer, args []string) error {
 		end = now
 	}
 
-	samples, err := dashboard.Load(s.dir, first)
+	samples, err := history.Load(s.dir, first)
 	if err != nil {
 		return fmt.Errorf("failed to load history: %w", err)
 	}
@@ -222,7 +223,7 @@ func writeFooter(w io.Writer, sum dashboard.Summary) {
 
 	blank := true
 
-	for _, fuel := range []dashboard.Metric{dashboard.Gas, dashboard.Electricity} {
+	for _, fuel := range []history.Metric{history.Gas, history.Electricity} {
 		kwh, ok := sum.Fuels[fuel]
 		if !ok {
 			continue

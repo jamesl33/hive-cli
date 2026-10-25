@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/jamesl33/hive-cli/internal/dashboard"
+	"github.com/jamesl33/hive-cli/internal/history"
 	"github.com/jamesl33/hive-cli/internal/octopus"
 )
 
@@ -32,8 +32,8 @@ type meterOptions struct {
 
 // metric returns the metric the meter's use is recorded as, which is named for the fuel. It is also the
 // device.
-func metric(fuel octopus.Fuel) dashboard.Metric {
-	return dashboard.Metric(fuel)
+func metric(fuel octopus.Fuel) history.Metric {
+	return history.Metric(fuel)
 }
 
 // client returns the Octopus client, or nil if the meter isn't being recorded.
@@ -62,7 +62,7 @@ func (o meterOptions) client(key string) (*octopus.Client, error) {
 // usageLoop records the energy used until the context is cancelled. A failed load of the history or
 // fetch is retried at the next one, and nothing is fetched until the history has loaded, so that half
 // hours already recorded aren't added again.
-func usageLoop(ctx context.Context, c *octopus.Client, log *dashboard.Log, dir string) {
+func usageLoop(ctx context.Context, c *octopus.Client, log *history.Log, dir string) {
 	var (
 		after  time.Time
 		err    error
@@ -96,8 +96,8 @@ func usageLoop(ctx context.Context, c *octopus.Client, log *dashboard.Log, dir s
 
 // latestUsage returns the start of the newest half hour of the metric in the history, or the zero time
 // if there is none.
-func latestUsage(dir string, m dashboard.Metric) (time.Time, error) {
-	samples, err := dashboard.Load(dir, time.Now().Add(-usageBackfill))
+func latestUsage(dir string, m history.Metric) (time.Time, error) {
+	samples, err := history.Load(dir, time.Now().Add(-usageBackfill))
 	if err != nil {
 		return time.Time{}, fmt.Errorf("failed to load %s history: %w", m, err)
 	}
@@ -123,7 +123,7 @@ func latest(a, b time.Time) time.Time {
 }
 
 // recordUsage adds the half hours after the time to the log, returning the start of the newest.
-func recordUsage(ctx context.Context, c *octopus.Client, log *dashboard.Log, after time.Time) (time.Time, error) {
+func recordUsage(ctx context.Context, c *octopus.Client, log *history.Log, after time.Time) (time.Time, error) {
 	from := after
 	if from.IsZero() {
 		from = time.Now().Add(-usageBackfill)
@@ -142,7 +142,7 @@ func recordUsage(ctx context.Context, c *octopus.Client, log *dashboard.Log, aft
 			continue
 		}
 
-		log.Add(dashboard.Sample{Device: string(m), Metric: m, At: i.Start, Value: i.KWh})
+		log.Add(history.Sample{Device: string(m), Metric: m, At: i.Start, Value: i.KWh})
 
 		newest = latest(newest, i.Start)
 	}

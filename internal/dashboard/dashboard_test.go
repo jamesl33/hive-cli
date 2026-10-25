@@ -9,6 +9,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/jamesl33/hive-cli/internal/history"
 	"github.com/jamesl33/hive-cli/internal/hive"
 	"github.com/jamesl33/hive-cli/internal/z2m"
 	"github.com/stretchr/testify/assert"
@@ -55,19 +56,19 @@ func TestSeriesAppendPanicsOverTheLimit(t *testing.T) {
 func TestExtractSensor(t *testing.T) {
 	u := update(t, "hall", time.Unix(1, 0), `{"temperature":19.5,"humidity":48,"battery":87,"linkquality":120}`)
 
-	got := make(map[Metric]float64)
+	got := make(map[history.Metric]float64)
 	for _, s := range Extract(receiver, u, u.Payload) {
 		got[s.Metric] = s.Value
 	}
 
-	assert.Equal(t, map[Metric]float64{Temperature: 19.5, Humidity: 48, Battery: 87}, got)
+	assert.Equal(t, map[history.Metric]float64{history.Temperature: 19.5, history.Humidity: 48, history.Battery: 87}, got)
 }
 
 func TestExtractReceiverBoiler(t *testing.T) {
 	tests := map[string]float64{
-		`{"system_mode":"heat","running_state":"heat"}`: BoilerOn,
-		`{"system_mode":"heat","running_state":"idle"}`: BoilerIdle,
-		`{"system_mode":"off","running_state":"idle"}`:  BoilerOff,
+		`{"system_mode":"heat","running_state":"heat"}`: history.BoilerOn,
+		`{"system_mode":"heat","running_state":"idle"}`: history.BoilerIdle,
+		`{"system_mode":"off","running_state":"idle"}`:  history.BoilerOff,
 	}
 
 	for js, want := range tests {
@@ -75,7 +76,7 @@ func TestExtractReceiverBoiler(t *testing.T) {
 
 		samples := Extract(receiver, u, u.Payload)
 		require.Len(t, samples, 1, js)
-		assert.Equal(t, Boiler, samples[0].Metric, js)
+		assert.Equal(t, history.Boiler, samples[0].Metric, js)
 		assert.Equal(t, want, samples[0].Value, js)
 	}
 }
@@ -87,12 +88,12 @@ func TestStoreMergesReceiverState(t *testing.T) {
 	s.Apply(update(t, "hive", at, `{"system_mode":"heat"}`))
 	s.Apply(update(t, "hive", at.Add(time.Second), `{"running_state":"heat","local_temperature":18.5}`))
 
-	boiler := s.Series[Boiler]["hive"]
+	boiler := s.Series[history.Boiler]["hive"]
 	require.Len(t, boiler, 2)
-	assert.Equal(t, BoilerIdle, boiler[0].Value)
-	assert.Equal(t, BoilerOn, boiler[1].Value)
+	assert.Equal(t, history.BoilerIdle, boiler[0].Value)
+	assert.Equal(t, history.BoilerOn, boiler[1].Value)
 
-	temp, ok := s.Series[Temperature]["hive"].Last()
+	temp, ok := s.Series[history.Temperature]["hive"].Last()
 	require.True(t, ok)
 	assert.Equal(t, 18.5, temp.Value)
 }
@@ -133,11 +134,11 @@ func TestLegendMarksStaleDevices(t *testing.T) {
 func TestStrip(t *testing.T) {
 	from := time.Unix(0, 0)
 	s := Series{
-		{At: from.Add(15 * time.Second), Value: BoilerOn},
-		{At: from.Add(35 * time.Second), Value: BoilerIdle},
+		{At: from.Add(15 * time.Second), Value: history.BoilerOn},
+		{At: from.Add(35 * time.Second), Value: history.BoilerIdle},
 	}
 
-	assert.Equal(t, []float64{-1, BoilerOn, BoilerOn, BoilerIdle}, Strip(s, from, from.Add(40*time.Second), 4))
+	assert.Equal(t, []float64{-1, history.BoilerOn, history.BoilerOn, history.BoilerIdle}, Strip(s, from, from.Add(40*time.Second), 4))
 }
 
 func TestBatteryColor(t *testing.T) {
@@ -276,7 +277,7 @@ func TestStoreRecordsTarget(t *testing.T) {
 	s := NewStore(receiver)
 	s.Apply(update(t, "hive", time.Unix(1, 0), `{"system_mode":"heat","occupied_heating_setpoint":20.5}`))
 
-	target, ok := s.Series[Target]["hive"].Last()
+	target, ok := s.Series[history.Target]["hive"].Last()
 	require.True(t, ok)
 	assert.Equal(t, 20.5, target.Value)
 	assert.Contains(t, s.legend(time.Unix(2, 0), nil), "target 20.5°C")
@@ -407,9 +408,9 @@ func TestClampLoneOldPointOnceSpanned(t *testing.T) {
 func TestBoilerOnTime(t *testing.T) {
 	from, to := time.Unix(100, 0), time.Unix(200, 0)
 	s := Series{
-		{At: time.Unix(80, 0), Value: BoilerOn},
-		{At: time.Unix(120, 0), Value: BoilerOff},
-		{At: time.Unix(150, 0), Value: BoilerOn},
+		{At: time.Unix(80, 0), Value: history.BoilerOn},
+		{At: time.Unix(120, 0), Value: history.BoilerOff},
+		{At: time.Unix(150, 0), Value: history.BoilerOn},
 	}
 
 	assert.Equal(t, 20*time.Second+50*time.Second, boilerOnTime(s, from, to))
@@ -446,11 +447,11 @@ func TestHideOutdoors(t *testing.T) {
 	store.Apply(update(t, "hall", time.Now(), `{"temperature":18.2}`))
 
 	now := time.Now()
-	shown := store.renderChart(Temperature, nil, 60, 10, now.Add(-time.Hour), now)
-	hidden := store.renderChart(Temperature, map[string]bool{store.Outdoors: true}, 60, 10, now.Add(-time.Hour), now)
+	shown := store.renderChart(history.Temperature, nil, 60, 10, now.Add(-time.Hour), now)
+	hidden := store.renderChart(history.Temperature, map[string]bool{store.Outdoors: true}, 60, 10, now.Add(-time.Hour), now)
 
 	assert.NotEqual(t, shown.view, hidden.view)
-	assert.Len(t, store.Series[Temperature], 2)
+	assert.Len(t, store.Series[history.Temperature], 2)
 }
 
 func TestBoxCorner(t *testing.T) {

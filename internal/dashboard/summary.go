@@ -5,6 +5,8 @@ import (
 	"math"
 	"slices"
 	"time"
+
+	"github.com/jamesl33/hive-cli/internal/history"
 )
 
 // DeviceSummary is the temperature of a device over a period.
@@ -50,13 +52,13 @@ type Summary struct {
 	BoilerRuns int
 
 	// Fuels is the kWh of each fuel used in the period, for the fuels which have any readings.
-	Fuels map[Metric]float64
+	Fuels map[history.Metric]float64
 }
 
 // Summarize works out the temperature of each device, the spread between the rooms and the boiler use
 // from the samples between from and to, oldest first. A series is held at its last value, so samples
 // from before from set the starting values.
-func Summarize(samples []Sample, outdoors string, from, to time.Time) Summary {
+func Summarize(samples []history.Sample, outdoors string, from, to time.Time) Summary {
 	t := newTally(outdoors, from)
 
 	for _, s := range samples {
@@ -108,7 +110,7 @@ type tally struct {
 	boilerRuns int
 
 	// fuels is the kWh of each fuel used so far.
-	fuels map[Metric]float64
+	fuels map[history.Metric]float64
 }
 
 // newTally returns a tally of the period which starts at from.
@@ -119,16 +121,16 @@ func newTally(outdoors string, from time.Time) *tally {
 		prev:     from,
 		stats:    make(map[string]*DeviceSummary),
 		current:  make(map[string]float64),
-		boiler:   BoilerOff,
-		fuels:    make(map[Metric]float64),
+		boiler:   history.BoilerOff,
+		fuels:    make(map[history.Metric]float64),
 	}
 
 	return &t
 }
 
 // apply adds up the time before the sample, then takes in what the sample says.
-func (t *tally) apply(s Sample) {
-	if isUsage(s.Metric) {
+func (t *tally) apply(s history.Sample) {
+	if history.IsUsage(s.Metric) {
 		// Use is a total for the half hour, not a state, so it takes no time and counts only inside the period.
 		if !s.At.Before(t.from) {
 			t.fuels[s.Metric] += s.Value
@@ -140,16 +142,16 @@ func (t *tally) apply(s Sample) {
 	t.account(s.At)
 
 	switch s.Metric {
-	case Temperature:
+	case history.Temperature:
 		t.current[s.Device] = s.Value
-	case Boiler:
+	case history.Boiler:
 		t.setBoiler(s)
 	}
 }
 
 // setBoiler takes in the state of the boiler, counting a run if it started in the period.
-func (t *tally) setBoiler(s Sample) {
-	started := s.Value == BoilerOn && t.boiler != BoilerOn
+func (t *tally) setBoiler(s history.Sample) {
+	started := s.Value == history.BoilerOn && t.boiler != history.BoilerOn
 	if started && !s.At.Before(t.from) {
 		t.boilerRuns++
 	}
@@ -178,7 +180,7 @@ func (t *tally) account(until time.Time) {
 		lo, hi, rooms = math.Min(lo, v), math.Max(hi, v), rooms+1
 	}
 
-	if t.boiler == BoilerOn {
+	if t.boiler == history.BoilerOn {
 		t.boilerOn += elapsed
 	}
 
