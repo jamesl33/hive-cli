@@ -28,7 +28,7 @@ Runs a heating schedule on the Pi: `hive-schedule.timer` fires every 15 minutes,
 
 `install.sh` won't overwrite an existing `/etc/hive/schedule` or `/etc/hive/env`.
 
-For a different weekend, create `/etc/hive/schedule.weekend` in the same format. It replaces `schedule.weekday` all day Saturday and Sunday and is optional. Make the last slot of each file match so the changeover at midnight doesn't jump.
+`install.sh` seeds `/etc/hive/schedule.weekend` as a copy of the example; edit it for a different weekend. It replaces `schedule.weekday` all day Saturday and Sunday, and is optional (delete it to use the weekday schedule). Make the last slot of each file match so the changeover at midnight doesn't jump.
 
 ## History
 

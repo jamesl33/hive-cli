@@ -19,6 +19,7 @@ install -d -m 755 /etc/hive
 
 # Don't clobber an edited schedule or credentials on reinstall
 [ -e /etc/hive/schedule.weekday ] || install -m 644 schedule.example /etc/hive/schedule.weekday
+[ -e /etc/hive/schedule.weekend ] || install -m 644 schedule.example /etc/hive/schedule.weekend
 [ -e /etc/hive/env ] || install -m 600 env.example /etc/hive/env
 
 install -m 644 hive-schedule.service /etc/systemd/system/hive-schedule.service
