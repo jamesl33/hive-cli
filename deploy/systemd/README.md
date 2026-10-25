@@ -32,7 +32,7 @@ Runs a heating schedule on the Pi: `hive-schedule.timer` fires every 15 minutes,
 
 ## Away floor
 
-Set `HIVE_AWAY_MAC` in `/etc/hive/env` to your phone's Wi-Fi MAC (Android's per-network randomized one is stable) and install `arp-scan`. `hive-presence.timer` scans every 5 minutes and touches `/var/lib/hive/away-last-seen` when the phone answers. Once it has been unseen for `HIVE_AWAY_AFTER` seconds (default 1800), `hive-schedule` lowers any slot above `HIVE_AWAY_FLOOR` (default 14) to it; `off` slots stay off. When the phone reappears, `hive-presence` starts `hive-schedule` at once (within 5 minutes of your return) instead of waiting for the next slot. A missing file or failed scan counts as home.
+Set `HIVE_AWAY_MAC` in `/etc/hive/env` to your phone's Wi-Fi MAC (Android's per-network randomized one is stable) and install `arp-scan`. `hive-presence.timer` scans every 5 minutes and touches `/var/lib/hive/away-last-seen` when the phone answers. Once it has been unseen for `HIVE_AWAY_AFTER` seconds (default 1800), `hive-schedule` lowers any slot above `HIVE_AWAY_FLOOR` (default 14, or `off` to turn the heating off) to it; `off` slots stay off. When the phone reappears, `hive-presence` starts `hive-schedule` at once (within 5 minutes of your return) instead of waiting for the next slot. A missing file or failed scan counts as home.
 
 ## History
 

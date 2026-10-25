@@ -9,7 +9,8 @@
 # to call from a timer, after a reboot, or by hand.
 #
 # When HIVE_AWAY_MAC is set and hive-presence hasn't seen it for HIVE_AWAY_AFTER seconds (default
-# 1800), temps above HIVE_AWAY_FLOOR (default 14) are lowered to it. 'off' slots stay off.
+# 1800), temps above HIVE_AWAY_FLOOR (default 14) are lowered to it. HIVE_AWAY_FLOOR=off turns the
+# heating off instead. 'off' slots stay off.
 
 set -eu
 
@@ -70,7 +71,10 @@ if [ -z "$current" ]; then
 	current_slot=$last_slot
 fi
 
-if [ "$current" != "off" ] && is_away && awk -v t="$current" -v f="$floor" 'BEGIN { exit !(t + 0 > f + 0) }'; then
+if [ "$current" != "off" ] && is_away && [ "$floor" = "off" ]; then
+	echo "hive-schedule: away, $current_slot slot wanted ${current}°C"
+	current=off
+elif [ "$current" != "off" ] && is_away && awk -v t="$current" -v f="$floor" 'BEGIN { exit !(t + 0 > f + 0) }'; then
 	echo "hive-schedule: away, $current_slot slot wanted ${current}°C"
 	current=$floor
 fi
