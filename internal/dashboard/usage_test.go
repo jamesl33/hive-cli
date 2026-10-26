@@ -121,10 +121,36 @@ func TestTabCyclesPages(t *testing.T) {
 	assert.Equal(t, pageFuels, next.(Model).page)
 
 	next, _ = next.Update(tea.KeyMsg{Type: tea.KeyTab})
+	assert.Equal(t, pageValves, next.(Model).page)
+
+	next, _ = next.Update(tea.KeyMsg{Type: tea.KeyTab})
 	assert.Equal(t, pageClimate, next.(Model).page)
 
 	next, _ = next.Update(tea.KeyMsg{Type: tea.KeyShiftTab})
-	assert.Equal(t, pageFuels, next.(Model).page)
+	assert.Equal(t, pageValves, next.(Model).page)
+}
+
+func TestValvesPageDrawsTheValveCharts(t *testing.T) {
+	store := NewStore(receiver)
+	now := time.Now()
+
+	store.Apply(update(t, "hall", now, `{"temperature":18.2}`))
+	store.Apply(update(t, "trv_bedroom", now, `{"local_temperature":21.5,"occupied_heating_setpoint":30,"heating_valve_position":100,"idle_valve_position":100,"running_state":"idle"}`))
+
+	m := New(t.Context(), feed{}, store)
+	next, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	next, _ = next.Update(tea.KeyMsg{Type: tea.KeyShiftTab})
+
+	view := next.View()
+	t.Log("\n" + view)
+
+	assert.LessOrEqual(t, strings.Count(view, "\n")+1, 40)
+
+	for _, want := range []string{"Temperature °C", "Setpoint °C", "Opening %", "bedroom"} {
+		assert.Contains(t, view, want)
+	}
+
+	assert.NotContains(t, view, "hall")
 }
 
 func TestViewPutsHumidityBelowTemperature(t *testing.T) {

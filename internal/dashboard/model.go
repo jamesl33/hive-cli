@@ -58,10 +58,11 @@ type page int
 const (
 	pageClimate page = iota
 	pageFuels
+	pageValves
 )
 
 // pageNames are the names of the pages, in order.
-var pageNames = []string{"Climate", "Fuels"}
+var pageNames = []string{"Climate", "Fuels", "Valves"}
 
 // defaultWindow is the position in windows shown at start.
 const defaultWindow = 4
@@ -393,8 +394,11 @@ func (m Model) draw(now time.Time) string {
 		return box(m.title("Devices"), "", msg, m.width)
 	}
 
-	if m.page == pageFuels {
+	switch m.page {
+	case pageFuels:
 		return strings.Join(m.drawFuels(now, from), "\n")
+	case pageValves:
+		return strings.Join(m.drawValves(now, from), "\n")
 	}
 
 	return strings.Join(m.drawClimate(now, from), "\n")
@@ -510,6 +514,77 @@ func (m Model) climateHeight(legendRows int, humidity bool, batteries int) int {
 	boxes := 3 + boolInt(humidity) + boolInt(batteries > 0)
 
 	return m.height - 2*boxes - 2 - legendRows - batteries
+}
+
+// drawValves draws the rows of the valves page: the legend of the radiator valves above a chart each of
+// their temperature, setpoint and opening.
+func (m Model) drawValves(now, from time.Time) []string {
+	if len(m.store.groupDevices(groupValves)) == 0 {
+		return []string{box(m.title("Valves"), "", "No radiator valves reported.", m.width)}
+	}
+
+	picking := groupNone
+	if m.picking {
+		picking = m.pick
+	}
+
+	legend := m.store.legendOf(now, m.hidden, picking, groupValves)
+	rows := []string{box(m.title("Valves"), formatWindow(windows[m.window]), legend, m.width)}
+
+	// Besides the charts there are the legend rows and the borders of each of the four boxes.
+	free := m.height - 2*4 - strings.Count(legend, "\n") - 1
+	if free/len(valveCharts) < minChartHeight {
+		return rows
+	}
+
+	hidden := m.valvesHidden()
+
+	for i, c := range valveCharts {
+		height := free / len(valveCharts)
+
+		// The temperature chart takes the rows which do not divide between the charts
+		if i == 0 {
+			height += free % len(valveCharts)
+		}
+
+		chart := m.store.renderChart(c.metric, hidden, m.width-2, height, from, now)
+		rows = append(rows, box(c.title, "", chart.view, m.width))
+	}
+
+	return rows
+}
+
+// valveChart is a chart of the valves page.
+type valveChart struct {
+	// metric is what the chart draws for each radiator valve.
+	metric history.Metric
+
+	// title is the title of the box around the chart.
+	title string
+}
+
+// valveCharts are the charts of the valves page, from the top.
+var valveCharts = []valveChart{
+	{history.Temperature, "Temperature °C"},
+	{history.Setpoint, "Setpoint °C"},
+	{history.Valve, "Opening %"},
+}
+
+// valvesHidden returns the devices left off the valves page: the hidden ones, and every device which is
+// not a radiator valve.
+func (m Model) valvesHidden() map[string]bool {
+	hidden := maps.Clone(m.hidden)
+	if hidden == nil {
+		hidden = map[string]bool{}
+	}
+
+	for _, device := range m.store.Order {
+		if m.store.group(device) != groupValves {
+			hidden[device] = true
+		}
+	}
+
+	return hidden
 }
 
 // drawFuels draws the rows of the fuels page: the energy used by each fuel, and the usage chart.

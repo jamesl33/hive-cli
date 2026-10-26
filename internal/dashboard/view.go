@@ -47,6 +47,10 @@ const (
 // usageColors are the metrics of energy used, which the usage chart draws, with their colours.
 var usageColors = map[history.Metric]lipgloss.Color{history.Gas: "214", history.Electricity: "39"}
 
+// steppedMetrics are the metrics which hold their value until the next report, so their charts draw
+// steps instead of slopes.
+var steppedMetrics = []history.Metric{history.Setpoint, history.Valve}
+
 // group is a kind of device, which the legend lists apart from the others.
 type group int
 
@@ -211,7 +215,12 @@ func (s *Store) renderChart(metric history.Metric, hide map[string]bool, w, h in
 	var plots []plot
 
 	for i, device := range s.Order {
-		points := downsample(clamp(spanned(visible(byDevice[device], from), to), from), from, to, w*2)
+		series := visible(byDevice[device], from)
+		if slices.Contains(steppedMetrics, metric) {
+			series = stepped(series)
+		}
+
+		points := downsample(clamp(spanned(series, to), from), from, to, w*2)
 		plots = append(plots, plot{style: lipgloss.NewStyle().Foreground(color(i)), points: points})
 	}
 
@@ -704,10 +713,19 @@ func (s *Store) lastSeen(device string) time.Time {
 // device which has not reported for staleAfter is greyed out and shows how long ago it did, and one
 // hidden from the charts is struck through.
 func (s *Store) legend(now time.Time, hide map[string]bool, picking group) string {
+	return s.legendOf(now, hide, picking, groupReceiver, groupSensors, groupValves)
+}
+
+// legendOf is the legend of the devices in the groups.
+func (s *Store) legendOf(now time.Time, hide map[string]bool, picking group, groups ...group) string {
 	parts := make([][]string, len(groupNames))
 
 	for i, device := range s.Order {
 		g := s.group(device)
+		if !slices.Contains(groups, g) {
+			continue
+		}
+
 		parts[g] = append(parts[g], s.legendEntry(i, len(parts[g]), device, now, hide[device]))
 	}
 
