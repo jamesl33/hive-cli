@@ -2,6 +2,7 @@ package control
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -154,7 +155,7 @@ func (c *Control) Run(ctx context.Context) error {
 	stop, cancel := context.WithTimeout(context.Background(), restoreTimeout)
 	defer cancel()
 
-	return joinErr(err, ctrl.Restore(stop))
+	return errors.Join(err, ctrl.Restore(stop))
 }
 
 // loop reads the feed and works out the valves every tick until the context is cancelled or the feed
@@ -303,13 +304,4 @@ func parseRoom(spec string) (control.Room, error) {
 	r := control.Room{Name: name, Sensor: sensor, Valve: valve}
 
 	return r, nil
-}
-
-// joinErr returns the first error, as the second is only a failure to tidy up after it.
-func joinErr(err, other error) error {
-	if err != nil {
-		return err
-	}
-
-	return other
 }
