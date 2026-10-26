@@ -7,6 +7,7 @@ import (
 
 	"github.com/jamesl33/hive-cli/cmd/analyze"
 	"github.com/jamesl33/hive-cli/cmd/boost"
+	"github.com/jamesl33/hive-cli/cmd/control"
 	"github.com/jamesl33/hive-cli/cmd/dashboard"
 	"github.com/jamesl33/hive-cli/cmd/manual"
 	"github.com/jamesl33/hive-cli/cmd/off"
@@ -66,6 +67,7 @@ func init() {
 	rootCommand.AddCommand(
 		analyze.NewAnalyze(),
 		boost.NewBoost(&options),
+		control.NewControl(&options),
 		dashboard.NewDashboard(&options),
 		manual.NewManual(&options),
 		off.NewOff(&options),
