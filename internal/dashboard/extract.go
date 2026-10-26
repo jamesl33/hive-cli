@@ -171,7 +171,9 @@ func (r *Reports) Samples(u z2m.Update) []history.Sample {
 // reported, which the receiver needs to work out the state of the boiler.
 func Extract(r hive.Receiver, u z2m.Update, state map[string]any) []history.Sample {
 	if u.Device != r.Name {
-		return readings(u, history.Temperature, history.Humidity, history.Battery)
+		samples := readings(u, history.Temperature, history.Humidity, history.Battery)
+
+		return append(samples, valveSamples(u, state)...)
 	}
 
 	samples := readings(u, history.Battery)
@@ -193,6 +195,55 @@ func readings(u z2m.Update, metrics ...history.Metric) []history.Sample {
 	}
 
 	return samples
+}
+
+// valveSamples returns the radiator temperature, setpoint and valve opening of a radiator valve if the
+// report changes them. Anything which does not report valve positions is not a radiator valve.
+func valveSamples(u z2m.Update, state map[string]any) []history.Sample {
+	_, ok := state["heating_valve_position"]
+	if !ok {
+		return nil
+	}
+
+	var samples []history.Sample
+
+	for attr, metric := range map[string]history.Metric{
+		"local_temperature":         history.Radiator,
+		"occupied_heating_setpoint": history.Setpoint,
+	} {
+		v, ok := u.Payload[attr].(float64)
+		if ok {
+			samples = append(samples, history.Sample{Device: u.Device, Metric: metric, At: u.At, Value: v})
+		}
+	}
+
+	open, ok := valveOpening(state)
+	if !ok {
+		return samples
+	}
+
+	_, running := u.Payload["running_state"]
+	_, heating := u.Payload["heating_valve_position"]
+	_, idle := u.Payload["idle_valve_position"]
+
+	if running || heating || idle {
+		samples = append(samples, history.Sample{Device: u.Device, Metric: history.Valve, At: u.At, Value: open})
+	}
+
+	return samples
+}
+
+// valveOpening returns the percent the valve is told to be open: the heating opening while it is
+// heating and the idle opening otherwise.
+func valveOpening(state map[string]any) (float64, bool) {
+	attr := "idle_valve_position"
+	if state["running_state"] == "heat" {
+		attr = "heating_valve_position"
+	}
+
+	v, ok := state[attr].(float64)
+
+	return v, ok
 }
 
 // receiverSamples returns the room temperature, target and boiler state if the report changes them.

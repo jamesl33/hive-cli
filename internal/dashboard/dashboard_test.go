@@ -507,3 +507,34 @@ func TestOutdoorsStartHidden(t *testing.T) {
 	assert.True(t, New(t.Context(), feed{}, store).hidden["garden"])
 	assert.Empty(t, New(t.Context(), feed{}, NewStore(receiver)).hidden)
 }
+
+func TestReportsRadiatorValve(t *testing.T) {
+	r := NewReports(receiver)
+
+	got := func(js string) map[history.Metric]float64 {
+		samples := make(map[history.Metric]float64)
+		for _, s := range r.Samples(update(t, "office-trv", time.Unix(1, 0), js)) {
+			samples[s.Metric] = s.Value
+		}
+
+		return samples
+	}
+
+	full := `{"local_temperature":21.5,"occupied_heating_setpoint":16,"heating_valve_position":80,"idle_valve_position":10,"running_state":"idle","battery":90}`
+
+	assert.Equal(t, map[history.Metric]float64{
+		history.Radiator: 21.5, history.Setpoint: 16, history.Valve: 10, history.Battery: 90,
+	}, got(full))
+
+	// The opening follows the running state, using the positions from earlier reports
+	assert.Equal(t, map[history.Metric]float64{history.Valve: 80}, got(`{"running_state":"heat"}`))
+	assert.Empty(t, got(`{"linkquality":40}`))
+}
+
+func TestReportsSensorHasNoValve(t *testing.T) {
+	r := NewReports(receiver)
+
+	for _, s := range r.Samples(update(t, "hall", time.Unix(1, 0), `{"temperature":19,"running_state":"idle"}`)) {
+		assert.Equal(t, history.Temperature, s.Metric)
+	}
+}

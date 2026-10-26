@@ -22,6 +22,16 @@ const (
 	// Target is the °C the Hive receiver is set to hold the room at.
 	Target Metric = "target"
 
+	// Radiator is the °C a radiator valve measured at the radiator, which reads warmer than the room.
+	Radiator Metric = "radiator"
+
+	// Setpoint is the °C a radiator valve is set to hold.
+	Setpoint Metric = "setpoint"
+
+	// Valve is the percent a radiator valve is told to be open, taken from the opening it is set to use
+	// while heating or while idle, whichever applies. It is not a measured position.
+	Valve Metric = "valve"
+
 	// Gas is the kWh of gas used in the half hour starting at the sample, from the smart meter. It is
 	// drawn on the usage chart. As with every metric a repeated value is dropped, so a half hour
 	// without a sample has the value of the one before.
