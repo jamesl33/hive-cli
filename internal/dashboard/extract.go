@@ -15,6 +15,9 @@ type Store struct {
 	// Receiver is the Hive receiver; it reports the boiler and the Hive temperature.
 	Receiver hive.Receiver
 
+	// Thermostat is the friendly name of the Hive thermostat, which is listed with the receiver.
+	Thermostat string
+
 	// Outdoors is the friendly name of the outdoor sensor, which the charts can leave out.
 	Outdoors string
 
@@ -168,7 +171,7 @@ func (s *Store) groupDevices(g group) []string {
 // group says which group of devices the device is in.
 func (s *Store) group(device string) group {
 	switch {
-	case device == s.Receiver.Name:
+	case device == s.Receiver.Name || device == s.Thermostat && device != "":
 		return groupReceiver
 	case len(s.Series[history.Valve][device]) > 0:
 		return groupValves

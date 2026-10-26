@@ -53,6 +53,7 @@ func (d *Dashboard) Run(ctx context.Context) error {
 
 	store := dashboard.NewStore(feed.Receiver)
 	store.Outdoors = d.outdoors
+	store.Thermostat = feed.Thermostat
 
 	model := dashboard.New(ctx, feed, store)
 

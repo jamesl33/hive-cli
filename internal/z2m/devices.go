@@ -44,6 +44,12 @@ func (d Device) IsReceiver() bool {
 		hive.IsReceiverModel(d.Definition.Model)
 }
 
+// IsThermostat returns true if the device is a Hive thermostat.
+func (d Device) IsThermostat() bool {
+	return d.Definition != nil && strings.EqualFold(d.Definition.Vendor, "Hive") &&
+		hive.IsThermostatModel(d.Definition.Model)
+}
+
 // Devices returns the devices known to Zigbee2MQTT.
 func Devices(ctx context.Context, c *mqtt.Client) ([]Device, error) {
 	topic := baseTopic + "/bridge/devices"

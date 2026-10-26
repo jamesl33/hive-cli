@@ -150,8 +150,26 @@ func TestLegendGroupsDevices(t *testing.T) {
 	assert.Contains(t, lines[1], "a ● bedroom-trv 21.5°C set 30.0°C valve 100%")
 }
 
+func TestLegendListsThermostatWithReceiver(t *testing.T) {
+	s := NewStore(receiver)
+	s.Thermostat = "thermostat"
+	now := time.Unix(100000, 0)
+
+	s.Apply(update(t, "thermostat", now, `{"battery":85}`))
+	s.Apply(update(t, "hive", now, `{"local_temperature":16.1}`))
+	s.Apply(update(t, "lounge", now, `{"temperature":17}`))
+
+	lines := strings.Split(s.legend(now, nil, groupNone), "\n")
+
+	require.Len(t, lines, 2)
+	assert.Contains(t, lines[0], "hive")
+	assert.Contains(t, lines[0], "thermostat")
+	assert.Contains(t, lines[1], "lounge")
+}
+
 func TestPickingDeviceByGroupThenLetter(t *testing.T) {
 	m := New(t.Context(), feed{}, NewStore(receiver))
+	m.store.Thermostat = "thermostat"
 	now := time.Unix(1, 0)
 
 	for i := range 16 {

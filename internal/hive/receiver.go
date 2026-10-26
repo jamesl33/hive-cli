@@ -44,3 +44,8 @@ func (r Receiver) Key(attr string) string {
 func IsReceiverModel(model string) bool {
 	return strings.HasPrefix(strings.ToUpper(model), "SLR")
 }
+
+// IsThermostatModel returns true if the model is a Hive thermostat, which is paired with the receiver.
+func IsThermostatModel(model string) bool {
+	return strings.HasPrefix(strings.ToUpper(model), "SLT")
+}

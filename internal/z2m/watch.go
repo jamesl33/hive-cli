@@ -27,6 +27,9 @@ type Feed struct {
 	// Receiver is the Hive receiver.
 	Receiver hive.Receiver
 
+	// Thermostat is the friendly name of the Hive thermostat, or empty if there is none.
+	Thermostat string
+
 	// client is the broker connection.
 	client *mqtt.Client
 
@@ -83,11 +86,17 @@ func setup(ctx context.Context, c *mqtt.Client) (*Feed, error) {
 	}
 
 	names := make(map[string]bool, len(devices))
+	thermostat := ""
+
 	for _, d := range devices {
 		names[d.FriendlyName] = true
+
+		if d.IsThermostat() {
+			thermostat = d.FriendlyName
+		}
 	}
 
-	f := &Feed{Receiver: r, client: c, names: names}
+	f := &Feed{Receiver: r, Thermostat: thermostat, client: c, names: names}
 
 	return f, nil
 }
