@@ -248,10 +248,12 @@ func valveSamples(u z2m.Update, state map[string]any) []history.Sample {
 
 	var samples []history.Sample
 
-	for attr, metric := range map[string]history.Metric{
+	attrs := map[string]history.Metric{
 		"local_temperature":         history.Temperature,
 		"occupied_heating_setpoint": history.Setpoint,
-	} {
+	}
+
+	for attr, metric := range attrs {
 		v, ok := u.Payload[attr].(float64)
 		if ok {
 			samples = append(samples, history.Sample{Device: u.Device, Metric: metric, At: u.At, Value: v})
