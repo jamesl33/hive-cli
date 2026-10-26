@@ -253,27 +253,36 @@ func (c *Controller) Tick(ctx context.Context, now time.Time) ([]Decision, error
 	)
 
 	for _, rs := range c.rooms {
-		d := c.decide(rs, now)
-
-		if d.Written {
-			err := c.valves.SetOpening(ctx, rs.Valve, d.Opening)
-			if err != nil {
-				d.Written = false
-				d.Reason = "write failed"
-
-				errs = append(errs, fmt.Errorf("failed to set %s: %w", rs.Valve, err))
-			}
-
-			if err == nil {
-				rs.lastWrite = now
-				c.openings[rs.Valve] = d.Opening
-			}
+		d, err := c.tickRoom(ctx, rs, now)
+		if err != nil {
+			errs = append(errs, err)
 		}
 
 		decisions = append(decisions, d)
 	}
 
 	return decisions, errors.Join(errs...)
+}
+
+// tickRoom works out a room and writes its valve if it needs it.
+func (c *Controller) tickRoom(ctx context.Context, rs *roomState, now time.Time) (Decision, error) {
+	d := c.decide(rs, now)
+	if !d.Written {
+		return d, nil
+	}
+
+	err := c.valves.SetOpening(ctx, rs.Valve, d.Opening)
+	if err != nil {
+		d.Written = false
+		d.Reason = "write failed"
+
+		return d, fmt.Errorf("failed to set %s: %w", rs.Valve, err)
+	}
+
+	rs.lastWrite = now
+	c.openings[rs.Valve] = d.Opening
+
+	return d, nil
 }
 
 // Restore opens every valve fully.
