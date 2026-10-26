@@ -198,8 +198,11 @@ func (s *Store) renderChart(metric history.Metric, hide map[string]bool, w, h in
 	}
 
 	lo, hi := valueRange(from, byDevice, targets)
+	label := "%.1f"
+
 	if metric == history.Valve {
-		lo, hi = 0, 100
+		// The labels are padded to the same width, as the chart only makes room for the labels it counts
+		lo, hi, label = 0, 100, "%3.0f"
 	}
 
 	fresh := func() timeserieslinechart.Model {
@@ -207,7 +210,7 @@ func (s *Store) renderChart(metric history.Metric, hide map[string]bool, w, h in
 			timeserieslinechart.WithTimeRange(from, to),
 			timeserieslinechart.WithYRange(lo, hi),
 			timeserieslinechart.WithXYSteps(1, 4),
-			timeserieslinechart.WithYLabelFormatter(func(_ int, v float64) string { return fmt.Sprintf("%.1f", v) }),
+			timeserieslinechart.WithYLabelFormatter(func(_ int, v float64) string { return fmt.Sprintf(label, v) }),
 		)
 
 		c.XLabelFormatter = tickLabels(tickStep(to.Sub(from)), to.Sub(from)/time.Duration(c.GraphWidth()))
