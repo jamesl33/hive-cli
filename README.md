@@ -29,7 +29,7 @@ hive record         record the dashboard's history to disk until stopped (30 day
 hive summary [first [last]]  mean/min/max per sensor, spread between rooms and boiler use for a day or range of days (default today)
 ```
 
-- Dashboard keys: `tab`/`shift+tab` page (Climate, Fuels), `w`/`W` time window, `1`-`8` show or hide a device on the charts, `o` show or hide the outdoor sensor, which starts hidden (`--outdoors`, default `outdoors`), `space` pause, `?` help, `q` quit.
+- Dashboard keys: `tab`/`shift+tab` page (Climate, Fuels), `w`/`W` time window, `1`-`0` then `a`-`z` show or hide a device on the charts, `o` show or hide the outdoor sensor, which starts hidden (`--outdoors`, default `tah_outdoors`), `space` pause, `?` help, `q` quit.
 - `record`, `dashboard` and `summary` share `--history` (`HIVE_HISTORY`, default `~/.local/state/hive`). The dashboard loads everything `record` wrote, then goes live.
 - `record` also stores the gas used from an Octopus smart meter as the `gas` metric (kWh per half hour) when `OCTOPUS_API_KEY`, `--octopus-gas-mprn` and `--octopus-gas-serial` are set, and likewise the electricity used as the `electricity` metric with `--octopus-electricity-mpan` and `--octopus-electricity-serial`. The dashboard draws a line for each on a "Usage" chart of the last 7 days, whatever the window; Octopus publishes about a day late, so the line stops short of the right edge and the chart says how far behind it is. It reads the history at start and on `w`, not live.
 - Flags: `--broker` (`HIVE_BROKER`, default `tcp://localhost:1883`, `mqtts://` for TLS), `--username` (`HIVE_USERNAME`), `--password` (`HIVE_PASSWORD`).
@@ -41,12 +41,12 @@ Example `hive summary` output:
 ```
 2026-10-23  until 20:43
 
-            mean   min   max
-bedroom     15.9  14.8  17.2
-hive        15.6  14.0  17.5
-lounge      15.0  13.2  16.6
-office      16.9  15.1  18.9
-outdoors     8.2   7.3   9.3
+              mean   min   max
+tah_bedroom    15.9  14.8  17.2
+hive_receiver 15.6  14.0  17.5
+tah_lounge     15.0  13.2  16.6
+tah_office     16.9  15.1  18.9
+tah_outdoors   8.2   7.3   9.3
 
 spread 2.4°C mean · 3.9°C max
 boiler 3h16m on · 6 runs

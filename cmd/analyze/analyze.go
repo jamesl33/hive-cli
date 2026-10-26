@@ -87,14 +87,14 @@ func NewAnalyze() *cobra.Command {
 	cmd.Flags().StringVar(
 		&a.receiver,
 		"receiver",
-		"hive",
+		"hive_receiver",
 		"friendly name of the Hive receiver, which reports the boiler, target and room temperature",
 	)
 
 	cmd.Flags().StringVar(
 		&a.outdoors,
 		"outdoors",
-		"outdoors",
+		"tah_outdoors",
 		"friendly name of the outdoor sensor",
 	)
 

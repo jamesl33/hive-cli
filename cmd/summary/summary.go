@@ -67,7 +67,7 @@ func NewSummary() *cobra.Command {
 	cmd.Flags().StringVar(
 		&s.outdoors,
 		"outdoors",
-		"outdoors",
+		"tah_outdoors",
 		"friendly name of the outdoor sensor, left out of the spread",
 	)
 

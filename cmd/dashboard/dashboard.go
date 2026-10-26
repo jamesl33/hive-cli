@@ -38,7 +38,7 @@ func NewDashboard(options *z2m.Options) *cobra.Command {
 		"directory with the history written by 'hive record' (HIVE_HISTORY)",
 	)
 
-	cmd.Flags().StringVar(&d.outdoors, "outdoors", "outdoors", "friendly name of the outdoor sensor, which 'o' hides on the charts")
+	cmd.Flags().StringVar(&d.outdoors, "outdoors", "tah_outdoors", "friendly name of the outdoor sensor, which 'o' hides on the charts")
 
 	return &cmd
 }
