@@ -12,6 +12,7 @@ import (
 	"github.com/jamesl33/hive-cli/internal/dashboard"
 	"github.com/jamesl33/hive-cli/internal/z2m"
 	"github.com/spf13/cobra"
+	"golang.org/x/sync/errgroup"
 )
 
 // restoreTimeout is how long to wait to open the valves when stopping.
@@ -156,29 +157,42 @@ func (c *Control) Run(ctx context.Context) error {
 	return joinErr(err, ctrl.Restore(stop))
 }
 
-// loop feeds the reports to the controller and works out the valves every tick until the context is
-// cancelled.
+// loop reads the feed and works out the valves every tick until the context is cancelled or the feed
+// fails.
 func (c *Control) loop(ctx context.Context, feed *z2m.Feed, ctrl *control.Controller) error {
 	updates := make(chan z2m.Update)
-	failed := make(chan error, 1)
 
-	go func() {
-		for {
-			u, err := feed.Next(ctx)
-			if err != nil {
-				failed <- err
+	g, ctx := errgroup.WithContext(ctx)
 
-				return
-			}
+	g.Go(func() error { return forward(ctx, feed, updates) })
+	g.Go(func() error { return c.process(ctx, feed, ctrl, updates) })
 
-			select {
-			case updates <- u:
-			case <-ctx.Done():
-				return
-			}
+	return g.Wait()
+}
+
+// forward sends the reports of the feed on until the context is cancelled.
+func forward(ctx context.Context, feed *z2m.Feed, updates chan<- z2m.Update) error {
+	for {
+		u, err := feed.Next(ctx)
+		if ctx.Err() != nil {
+			return nil
 		}
-	}()
 
+		if err != nil {
+			return err
+		}
+
+		select {
+		case updates <- u:
+		case <-ctx.Done():
+			return nil
+		}
+	}
+}
+
+// process feeds the reports to the controller and works out the valves every tick until the context is
+// cancelled.
+func (c *Control) process(ctx context.Context, feed *z2m.Feed, ctrl *control.Controller, updates <-chan z2m.Update) error {
 	reports := dashboard.NewReports(feed.Receiver)
 
 	t := time.NewTicker(c.tick)
@@ -191,12 +205,6 @@ func (c *Control) loop(ctx context.Context, feed *z2m.Feed, ctrl *control.Contro
 		select {
 		case <-ctx.Done():
 			return nil
-		case err := <-failed:
-			if ctx.Err() != nil {
-				return nil
-			}
-
-			return err
 		case u := <-updates:
 			for _, s := range reports.Samples(u) {
 				ctrl.Add(s)
