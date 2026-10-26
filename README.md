@@ -42,15 +42,24 @@ Example `hive summary` output:
 2026-10-23  until 20:43
 
               mean   min   max
-tah_bedroom    15.9  14.8  17.2
-hive_receiver 15.6  14.0  17.5
-tah_lounge     15.0  13.2  16.6
-tah_office     16.9  15.1  18.9
-tah_outdoors   8.2   7.3   9.3
+Hive
+  receiver    15.6  14.0  17.5
 
-spread 2.4°C mean · 3.9°C max
-boiler 3h16m on · 6 runs
+Sensors
+  bedroom     15.9  14.8  17.2
+  lounge      15.0  13.2  16.6
+  office      16.9  15.1  18.9
+  outdoors     8.2   7.3   9.3
+
+TRVs
+  bedroom     16.4  15.2  17.8
+  office      17.3  15.8  19.4
+
+spread        2.4°C mean · 3.9°C max
+boiler        3h16m on · 6 runs
 ```
+
+Devices are grouped by kind with the kind prefix dropped. TRV temperatures are left out of the spread.
 
 ## Install
 
