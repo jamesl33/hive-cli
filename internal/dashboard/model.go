@@ -71,7 +71,8 @@ const helpText = `tab    next page
 shift+tab previous page
 w      next time window
 W      previous time window
-1-8    show or hide a device on the charts
+1-0 a-z pick a group with a number, then show or hide a device in it with a letter
+esc    cancel picking a device
 o      show or hide the outdoor sensor on the charts
 g, e   show or hide gas or electricity on the usage chart
 space pause or resume the display
@@ -106,6 +107,8 @@ type viewKey struct {
 	help          bool
 	paused        bool
 	hidden        string
+	picking       bool
+	pick          group
 	connected     bool
 	bucket        int64
 }
@@ -134,6 +137,10 @@ type Model struct {
 	// hidden is the devices left off the charts, so they scale to the others. It is replaced, not
 	// changed, by toggle, as models share it.
 	hidden map[string]bool
+
+	// picking is set after the key of a group, until the key of a device in the group, which is pick.
+	picking bool
+	pick    group
 
 	// paused freezes the drawing at pausedAt, and at the reports which had arrived by pausedVersion.
 	paused        bool
@@ -188,6 +195,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 	case tea.KeyMsg:
+		if m.picking && msg.String() != "ctrl+c" {
+			return m.pickDevice(msg.String()), nil
+		}
+
 		switch msg.String() {
 		case "esc":
 			if m.help {
@@ -211,10 +222,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m = m.toggle(string(history.Gas))
 		case "e":
 			m = m.toggle(string(history.Electricity))
-		case "1", "2", "3", "4", "5", "6", "7", "8":
-			if i := int(msg.String()[0] - '1'); i < len(m.store.Order) {
-				m = m.toggle(m.store.Order[i])
-			}
 		case " ":
 			m.paused = !m.paused
 			m.pausedAt, m.pausedVersion = time.Now(), m.store.version
@@ -231,6 +238,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.err = fmt.Errorf("failed to load history: %w", err)
 
 				return m, tea.Quit
+			}
+		case "1", "2", "3", "4", "5", "6", "7", "8", "9", "0":
+			g := group(strings.Index(groupKeys, msg.String()))
+			if len(m.store.groupDevices(g)) > 0 {
+				m.picking, m.pick = true, g
 			}
 		}
 	case updateMsg:
@@ -251,6 +263,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+// pickDevice ends picking: the letter shows or hides the device of that position in the group, and
+// any other key cancels.
+func (m Model) pickDevice(key string) Model {
+	m.picking = false
+
+	if len(key) != 1 || key[0] < 'a' || key[0] > 'z' {
+		return m
+	}
+
+	devices := m.store.groupDevices(m.pick)
+	if i := int(key[0] - 'a'); i < len(devices) {
+		return m.toggle(devices[i])
+	}
+
+	return m
 }
 
 // toggle shows the device on the charts if it is hidden, and hides it if it is shown.
@@ -315,6 +344,8 @@ func (m Model) viewKey(now time.Time) viewKey {
 		help:      m.help,
 		paused:    m.paused,
 		hidden:    m.hiddenKey(),
+		picking:   m.picking,
+		pick:      m.pick,
 		connected: m.connected,
 		bucket:    now.UnixNano() / int64(m.cell()),
 	}
@@ -394,22 +425,29 @@ func (m Model) tabs() string {
 // the boiler and batteries below.
 func (m Model) drawClimate(now, from time.Time) []string {
 	batteries := m.store.batteries()
-	rows := []string{box(m.title("Devices"), formatWindow(windows[m.window]), m.store.legend(now, m.hidden), m.width)}
+	picking := groupNone
+	if m.picking {
+		picking = m.pick
+	}
+
+	legend := m.store.legend(now, m.hidden, picking)
+	legendRows := strings.Count(legend, "\n") + 1
+	rows := []string{box(m.title("Devices"), formatWindow(windows[m.window]), legend, m.width)}
 
 	// Besides the charts there are the legend row, the two boiler rows, the battery rows and the
 	// borders of each box. When the charts would get too short, the humidity and then the batteries
 	// are left off.
 	hasHumidity := len(m.store.Series[history.Humidity]) > 0
-	h := m.climateHeight(hasHumidity, len(batteries))
+	h := m.climateHeight(legendRows, hasHumidity, len(batteries))
 
 	if h < minChartHeight*(1+boolInt(hasHumidity)) {
 		hasHumidity = false
-		h = m.climateHeight(false, len(batteries))
+		h = m.climateHeight(legendRows, false, len(batteries))
 	}
 
 	if h < minChartHeight {
 		batteries = nil
-		h = m.climateHeight(false, 0)
+		h = m.climateHeight(legendRows, false, 0)
 	}
 
 	// Humidity shares the height with the temperature, half each
@@ -437,12 +475,12 @@ func (m Model) drawClimate(now, from time.Time) []string {
 	return rows
 }
 
-// climateHeight returns the height left for the charts of the climate page, given the humidity chart and
-// the rows of batteries which are drawn.
-func (m Model) climateHeight(humidity bool, batteries int) int {
+// climateHeight returns the height left for the charts of the climate page, given the rows of the legend,
+// the humidity chart and the rows of batteries which are drawn.
+func (m Model) climateHeight(legendRows int, humidity bool, batteries int) int {
 	boxes := 3 + boolInt(humidity) + boolInt(batteries > 0)
 
-	return m.height - 2*boxes - 3 - batteries
+	return m.height - 2*boxes - 2 - legendRows - batteries
 }
 
 // drawFuels draws the rows of the fuels page: the energy used by each fuel, and the usage chart.

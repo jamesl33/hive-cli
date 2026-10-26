@@ -24,8 +24,9 @@ const (
 	lowBattery    = 20
 	mediumBattery = 40
 
-	// maxToggles is the number of devices which can be hidden by number, which is the keys 1 to 8.
-	maxToggles = 8
+	// groupKeys are the keys which pick a group of devices, in the order of the groups. A letter then
+	// hides a device in the group, so no letter is taken by another key.
+	groupKeys = "1234567890"
 
 	// staleAfter is how long a device can go without reporting before the legend greys it out.
 	staleAfter = 2 * time.Hour
@@ -46,8 +47,28 @@ const (
 // usageColors are the metrics of energy used, which the usage chart draws, with their colours.
 var usageColors = map[history.Metric]lipgloss.Color{history.Gas: "214", history.Electricity: "39"}
 
-// palette is the colours of the devices, in the order of their names.
-var palette = []lipgloss.Color{"39", "208", "42", "205", "220", "141", "51", "203"}
+// group is a kind of device, which the legend lists apart from the others.
+type group int
+
+const (
+	groupReceiver group = iota
+	groupSensors
+	groupValves
+)
+
+// groupNone is no group.
+const groupNone group = -1
+
+// maxGroupDevices is the number of devices which can be hidden in a group, which is the letters a to z.
+const maxGroupDevices = 26
+
+// groupNames are the names of the groups, in order.
+var groupNames = []string{"Hive", "Sensors", "TRVs"}
+
+// palette is the colours of the devices, in the order they are listed.
+var palette = []lipgloss.Color{
+	"39", "208", "42", "205", "220", "141", "51", "203", "118", "99",
+}
 
 // Boiler styles, by state.
 var (
@@ -679,58 +700,85 @@ func (s *Store) lastSeen(device string) time.Time {
 	return seen
 }
 
-// legend lists each device with its key, colour and latest readings; a device which has not reported
-// for staleAfter is greyed out and shows how long ago it did, and one hidden from the charts is
-// struck through.
-func (s *Store) legend(now time.Time, hide map[string]bool) string {
-	parts := make([]string, 0, len(s.Order))
+// legend lists the devices of each group on a line, each with its key, colour and latest readings; a
+// device which has not reported for staleAfter is greyed out and shows how long ago it did, and one
+// hidden from the charts is struck through.
+func (s *Store) legend(now time.Time, hide map[string]bool, picking group) string {
+	parts := make([][]string, len(groupNames))
 
 	for i, device := range s.Order {
-		text := device
-
-		if p, ok := s.Series[history.Temperature][device].Last(); ok {
-			text += fmt.Sprintf(" %.1f°C", p.Value)
-		}
-
-		style := lipgloss.NewStyle().Foreground(color(i))
-		stale := now.Sub(s.lastSeen(device)) >= staleAfter
-
-		if stale {
-			style = lipgloss.NewStyle().Foreground(staleColor)
-		}
-
-		style = style.Strikethrough(hide[device])
-
-		key := ""
-		if i < maxToggles {
-			key = fmt.Sprintf("%d ", i+1)
-		}
-
-		part := style.Render(key + "● " + text)
-
-		if p, ok := s.Series[history.Target][device].Last(); ok {
-			targetStyle := lipgloss.NewStyle().Foreground(targetColor).Strikethrough(hide[device])
-			if stale {
-				targetStyle = style
-			}
-
-			part += targetStyle.Render(fmt.Sprintf(" (target %.1f°C%s)", p.Value, s.gap(device, p.Value)))
-		}
-
-		text = ""
-
-		if p, ok := s.Series[history.Humidity][device].Last(); ok {
-			text += fmt.Sprintf(" %.0f%%", p.Value)
-		}
-
-		if stale {
-			text += fmt.Sprintf(" (%s ago)", formatWindow(now.Sub(s.lastSeen(device))))
-		}
-
-		parts = append(parts, part+style.Render(text))
+		g := s.group(device)
+		parts[g] = append(parts[g], s.legendEntry(i, len(parts[g]), device, now, hide[device]))
 	}
 
-	return strings.Join(parts, "  ")
+	var lines []string
+
+	for g, entries := range parts {
+		if len(entries) == 0 {
+			continue
+		}
+
+		label := lipgloss.NewStyle().Reverse(group(g) == picking).Render(fmt.Sprintf("%-9s", groupKeys[g:g+1]+" "+groupNames[g]))
+
+		lines = append(lines, label+" "+strings.Join(entries, "  "))
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+// legendEntry returns the legend entry of the device at the position i in the order, and the position
+// k in its group, which gives its letter.
+func (s *Store) legendEntry(i, k int, device string, now time.Time, hidden bool) string {
+	text := device
+
+	if p, ok := s.Series[history.Temperature][device].Last(); ok {
+		text += fmt.Sprintf(" %.1f°C", p.Value)
+	}
+
+	style := lipgloss.NewStyle().Foreground(color(i))
+	stale := now.Sub(s.lastSeen(device)) >= staleAfter
+
+	if stale {
+		style = lipgloss.NewStyle().Foreground(staleColor)
+	}
+
+	style = style.Strikethrough(hidden)
+
+	key := ""
+	if k < maxGroupDevices {
+		key = string(rune('a'+k)) + " "
+	}
+
+	part := style.Render(key + "● " + text)
+
+	if p, ok := s.Series[history.Target][device].Last(); ok {
+		targetStyle := lipgloss.NewStyle().Foreground(targetColor).Strikethrough(hidden)
+		if stale {
+			targetStyle = style
+		}
+
+		part += targetStyle.Render(fmt.Sprintf(" (target %.1f°C%s)", p.Value, s.gap(device, p.Value)))
+	}
+
+	text = ""
+
+	if p, ok := s.Series[history.Setpoint][device].Last(); ok {
+		text += fmt.Sprintf(" set %.1f°C", p.Value)
+	}
+
+	if p, ok := s.Series[history.Valve][device].Last(); ok {
+		text += fmt.Sprintf(" valve %.0f%%", p.Value)
+	}
+
+	if p, ok := s.Series[history.Humidity][device].Last(); ok {
+		text += fmt.Sprintf(" %.0f%%", p.Value)
+	}
+
+	if stale {
+		text += fmt.Sprintf(" (%s ago)", formatWindow(now.Sub(s.lastSeen(device))))
+	}
+
+	return part + style.Render(text)
 }
 
 // gap returns the signed difference between the temperature of the device and the target, e.g. ", +0.4",

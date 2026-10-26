@@ -3,6 +3,7 @@ package dashboard
 import (
 	"context"
 	"encoding/json/v2"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -124,11 +125,67 @@ func TestLegendMarksStaleDevices(t *testing.T) {
 	s.Apply(update(t, "office", now.Add(-5*time.Minute), `{"temperature":20.1}`))
 	s.Apply(update(t, "office", now.Add(-4*time.Hour), `{"battery":90}`))
 
-	legend := s.legend(now, nil)
+	legend := s.legend(now, nil, groupNone)
 
 	assert.Contains(t, legend, "hall 18.2°C (3h ago)")
 	assert.Contains(t, legend, "office 20.1°C")
 	assert.NotContains(t, legend, "office 20.1°C (")
+}
+
+func TestLegendGroupsDevices(t *testing.T) {
+	s := NewStore(receiver)
+	now := time.Unix(100000, 0)
+
+	s.Apply(update(t, "bedroom-trv", now, `{"local_temperature":21.5,"occupied_heating_setpoint":30,"heating_valve_position":100,"idle_valve_position":100,"running_state":"idle"}`))
+	s.Apply(update(t, "bedroom", now, `{"temperature":17.2}`))
+	s.Apply(update(t, "aaa", now, `{"temperature":18}`))
+
+	assert.Equal(t, []string{"aaa", "bedroom", "bedroom-trv"}, s.Order)
+
+	lines := strings.Split(s.legend(now, nil, groupNone), "\n")
+
+	require.Len(t, lines, 2)
+	assert.Contains(t, lines[0], "Sensors")
+	assert.Contains(t, lines[1], "TRVs")
+	assert.Contains(t, lines[1], "a ● bedroom-trv 21.5°C set 30.0°C valve 100%")
+}
+
+func TestPickingDeviceByGroupThenLetter(t *testing.T) {
+	m := New(t.Context(), feed{}, NewStore(receiver))
+	now := time.Unix(1, 0)
+
+	for i := range 16 {
+		m.store.Apply(update(t, fmt.Sprintf("dev%02d", i), now, `{"temperature":20}`))
+	}
+
+	m.store.Apply(update(t, "hive", now, `{"local_temperature":16}`))
+
+	press := func(m Model, k string) Model {
+		updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(k)})
+
+		return updated.(Model)
+	}
+
+	// Group 2 is the sensors; "o", which is the outdoor sensor key, is the 15th letter there
+	m = press(press(m, "2"), "l")
+	assert.True(t, m.hidden["dev11"])
+	assert.False(t, m.picking)
+
+	m = press(press(m, "2"), "o")
+	assert.True(t, m.hidden["dev14"])
+
+	// A key after a number is a letter even when it does something else
+	m = press(press(m, "2"), "q")
+	assert.False(t, m.picking)
+
+	// Escape cancels picking without quitting
+	m = press(m, "2")
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	assert.False(t, updated.(Model).picking)
+	assert.Nil(t, cmd)
+
+	// A group with no devices is not picked
+	assert.False(t, press(m, "3").picking)
 }
 
 func TestStrip(t *testing.T) {
@@ -280,7 +337,7 @@ func TestStoreRecordsTarget(t *testing.T) {
 	target, ok := s.Series[history.Target]["hive"].Last()
 	require.True(t, ok)
 	assert.Equal(t, 20.5, target.Value)
-	assert.Contains(t, s.legend(time.Unix(2, 0), nil), "target 20.5°C")
+	assert.Contains(t, s.legend(time.Unix(2, 0), nil, groupNone), "target 20.5°C")
 }
 
 func TestBoxClipsAndPads(t *testing.T) {
@@ -492,12 +549,16 @@ func TestToggleDevice(t *testing.T) {
 	store.Apply(update(t, "hall", time.Now(), `{"temperature":18.2}`))
 
 	m := New(t.Context(), feed{}, store)
-	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'1'}})
-	m = next.(Model)
-	assert.True(t, m.hidden["hall"])
 
-	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'1'}})
-	assert.False(t, next.(Model).hidden["hall"])
+	// Group 2 is the sensors, and "a" is the first device in it
+	for _, hidden := range []bool{true, false} {
+		for _, k := range []rune{'2', 'a'} {
+			next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{k}})
+			m = next.(Model)
+		}
+
+		assert.Equal(t, hidden, m.hidden["hall"])
+	}
 }
 
 func TestOutdoorsStartHidden(t *testing.T) {

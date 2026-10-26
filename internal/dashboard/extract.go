@@ -1,6 +1,7 @@
 package dashboard
 
 import (
+	"cmp"
 	"slices"
 	"time"
 
@@ -17,7 +18,8 @@ type Store struct {
 	// Outdoors is the friendly name of the outdoor sensor, which the charts can leave out.
 	Outdoors string
 
-	// Order is the devices sorted by name, so each gets the same colour on every run.
+	// Order is the devices grouped as the receiver, the sensors and the radiator valves, and sorted by name
+	// within each group, so each gets the same colour and key on every run.
 	Order []string
 
 	// Series is the samples of each device, by metric.
@@ -133,10 +135,46 @@ func (s *Store) add(sample history.Sample) {
 		return
 	}
 
-	i, found := slices.BinarySearch(s.Order, sample.Device)
-	if !found {
-		s.Order = slices.Insert(s.Order, i, sample.Device)
+	// A device which first reports a valve opening moves to the radiator valves
+	if !slices.Contains(s.Order, sample.Device) || sample.Metric == history.Valve && len(series[sample.Device]) == 1 {
+		s.sortOrder(sample.Device)
 	}
+}
+
+// sortOrder adds the device to the order if it is not in it, and sorts the order by group and name.
+func (s *Store) sortOrder(device string) {
+	if !slices.Contains(s.Order, device) {
+		s.Order = append(s.Order, device)
+	}
+
+	slices.SortFunc(s.Order, func(a, b string) int {
+		return cmp.Or(cmp.Compare(s.group(a), s.group(b)), cmp.Compare(a, b))
+	})
+}
+
+// groupDevices returns the devices in the group, by name.
+func (s *Store) groupDevices(g group) []string {
+	var devices []string
+
+	for _, device := range s.Order {
+		if s.group(device) == g {
+			devices = append(devices, device)
+		}
+	}
+
+	return devices
+}
+
+// group says which group of devices the device is in.
+func (s *Store) group(device string) group {
+	switch {
+	case device == s.Receiver.Name:
+		return groupReceiver
+	case len(s.Series[history.Valve][device]) > 0:
+		return groupValves
+	}
+
+	return groupSensors
 }
 
 // Reports works out the measurements in device reports.
