@@ -99,7 +99,7 @@ func TestViewShowsUsage(t *testing.T) {
 
 	m := New(t.Context(), feed{}, store)
 	next, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
-	next, _ = next.Update(tea.KeyMsg{Type: tea.KeyTab})
+	next, _ = next.Update(tea.KeyMsg{Type: tea.KeyShiftTab})
 
 	view := next.View()
 	t.Log("\n" + view)
@@ -118,16 +118,16 @@ func TestTabCyclesPages(t *testing.T) {
 	m := New(t.Context(), feed{}, NewStore(receiver))
 
 	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyTab})
-	assert.Equal(t, pageFuels, next.(Model).page)
+	assert.Equal(t, pageValves, next.(Model).page)
 
 	next, _ = next.Update(tea.KeyMsg{Type: tea.KeyTab})
-	assert.Equal(t, pageValves, next.(Model).page)
+	assert.Equal(t, pageFuels, next.(Model).page)
 
 	next, _ = next.Update(tea.KeyMsg{Type: tea.KeyTab})
 	assert.Equal(t, pageClimate, next.(Model).page)
 
 	next, _ = next.Update(tea.KeyMsg{Type: tea.KeyShiftTab})
-	assert.Equal(t, pageValves, next.(Model).page)
+	assert.Equal(t, pageFuels, next.(Model).page)
 }
 
 func TestValvesPageDrawsTheValveCharts(t *testing.T) {
@@ -139,7 +139,7 @@ func TestValvesPageDrawsTheValveCharts(t *testing.T) {
 
 	m := New(t.Context(), feed{}, store)
 	next, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
-	next, _ = next.Update(tea.KeyMsg{Type: tea.KeyShiftTab})
+	next, _ = next.Update(tea.KeyMsg{Type: tea.KeyTab})
 
 	view := next.View()
 	t.Log("\n" + view)
@@ -189,7 +189,7 @@ func TestViewFitsUsageAtMinHeight(t *testing.T) {
 
 	m := New(t.Context(), feed{}, store)
 	next, _ := m.Update(tea.WindowSizeMsg{Width: minWidth, Height: minHeight})
-	next, _ = next.Update(tea.KeyMsg{Type: tea.KeyTab})
+	next, _ = next.Update(tea.KeyMsg{Type: tea.KeyShiftTab})
 	height := minHeight
 
 	view := next.View()
@@ -263,7 +263,7 @@ func TestFuelsWithoutUsage(t *testing.T) {
 	store.add(history.Sample{Device: "hall", Metric: history.Temperature, At: time.Now(), Value: 18})
 
 	next, _ := New(t.Context(), feed{}, store).Update(tea.WindowSizeMsg{Width: 100, Height: 40})
-	next, _ = next.Update(tea.KeyMsg{Type: tea.KeyTab})
+	next, _ = next.Update(tea.KeyMsg{Type: tea.KeyShiftTab})
 
 	assert.Contains(t, next.View(), "No energy use recorded.")
 }
@@ -275,6 +275,6 @@ func TestTabRedrawsCachedView(t *testing.T) {
 	next, _ := New(t.Context(), feed{}, store).Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	assert.Contains(t, next.View(), "Temperature")
 
-	next, _ = next.Update(tea.KeyMsg{Type: tea.KeyTab})
+	next, _ = next.Update(tea.KeyMsg{Type: tea.KeyShiftTab})
 	assert.NotContains(t, next.View(), "Temperature")
 }

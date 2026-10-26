@@ -57,12 +57,12 @@ type page int
 
 const (
 	pageClimate page = iota
-	pageFuels
 	pageValves
+	pageFuels
 )
 
 // pageNames are the names of the pages, in order.
-var pageNames = []string{"Climate", "Fuels", "Valves"}
+var pageNames = []string{"Climate", "Valves", "Fuels"}
 
 // defaultWindow is the position in windows shown at start.
 const defaultWindow = 4
