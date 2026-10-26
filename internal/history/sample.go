@@ -29,6 +29,12 @@ const (
 	// while heating or while idle, whichever applies. It is not a measured position.
 	Valve Metric = "valve"
 
+	// ValveHeating is the percent a radiator valve is set to open to while heating, as it reports it.
+	ValveHeating Metric = "valve_heating"
+
+	// ValveIdle is the percent a radiator valve is set to open to while idle, as it reports it.
+	ValveIdle Metric = "valve_idle"
+
 	// Gas is the kWh of gas used in the half hour starting at the sample, from the smart meter. It is
 	// drawn on the usage chart. As with every metric a repeated value is dropped, so a half hour
 	// without a sample has the value of the one before.

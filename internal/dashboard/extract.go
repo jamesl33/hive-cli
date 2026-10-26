@@ -258,6 +258,12 @@ func valveSamples(u z2m.Update, state map[string]any) []history.Sample {
 		}
 	}
 
+	// The positions are logged as reported, so the log shows which of them the valve follows
+	samples = append(samples, readingsAs(u, map[string]history.Metric{
+		"heating_valve_position": history.ValveHeating,
+		"idle_valve_position":    history.ValveIdle,
+	})...)
+
 	open, ok := valveOpening(state)
 	if !ok {
 		return samples
@@ -274,15 +280,34 @@ func valveSamples(u z2m.Update, state map[string]any) []history.Sample {
 	return samples
 }
 
-// valveOpening returns the percent the valve is told to be open: the heating opening while it is
-// heating and the idle opening otherwise.
+// readingsAs returns the attributes which the report contains, as the metric each one is mapped to.
+func readingsAs(u z2m.Update, metrics map[string]history.Metric) []history.Sample {
+	var samples []history.Sample
+
+	for attr, metric := range metrics {
+		v, ok := u.Payload[attr].(float64)
+		if ok {
+			samples = append(samples, history.Sample{Device: u.Device, Metric: metric, At: u.At, Value: v})
+		}
+	}
+
+	return samples
+}
+
+// valveOpening returns the percent the valve is told to be open: the opening for the running state,
+// unless it is closed and the other opening is not, as which one the valve follows is not known.
 func valveOpening(state map[string]any) (float64, bool) {
-	attr := "idle_valve_position"
+	attr, other := "idle_valve_position", "heating_valve_position"
 	if state["running_state"] == "heat" {
-		attr = "heating_valve_position"
+		attr, other = other, attr
 	}
 
 	v, ok := state[attr].(float64)
+	o, okOther := state[other].(float64)
+
+	if okOther && (!ok || v == 0 && o != 0) {
+		return o, true
+	}
 
 	return v, ok
 }

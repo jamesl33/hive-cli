@@ -603,11 +603,34 @@ func TestReportsValve(t *testing.T) {
 
 	assert.Equal(t, map[history.Metric]float64{
 		history.Temperature: 21.5, history.Setpoint: 16, history.Valve: 10, history.Battery: 90,
+		history.ValveHeating: 80, history.ValveIdle: 10,
 	}, got(full))
 
 	// The opening follows the running state, using the positions from earlier reports
 	assert.Equal(t, map[history.Metric]float64{history.Valve: 80}, got(`{"running_state":"heat"}`))
 	assert.Empty(t, got(`{"linkquality":40}`))
+}
+
+func TestReportsValveOpening(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		state map[string]any
+		want  float64
+	}{
+		{"idle uses idle", map[string]any{"running_state": "idle", "idle_valve_position": 30.0, "heating_valve_position": 60.0}, 30},
+		{"heat uses heating", map[string]any{"running_state": "heat", "idle_valve_position": 30.0, "heating_valve_position": 60.0}, 60},
+		{"closed idle uses heating", map[string]any{"running_state": "idle", "idle_valve_position": 0.0, "heating_valve_position": 60.0}, 60},
+		{"closed heating uses idle", map[string]any{"running_state": "heat", "idle_valve_position": 30.0, "heating_valve_position": 0.0}, 30},
+		{"both closed", map[string]any{"running_state": "idle", "idle_valve_position": 0.0, "heating_valve_position": 0.0}, 0},
+		{"only heating known", map[string]any{"running_state": "idle", "heating_valve_position": 60.0}, 60},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := valveOpening(tc.state)
+
+			require.True(t, ok)
+			assert.Equal(t, tc.want, got)
+		})
+	}
 }
 
 func TestReportsSensorHasNoValve(t *testing.T) {
