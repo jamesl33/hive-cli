@@ -147,10 +147,10 @@ func TestWriteLimits(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, d[0].Written)
 
-		c.Add(history.Sample{Device: "tah_office", Metric: history.Temperature, At: start.Add(5 * time.Minute), Value: 15})
+		c.Add(history.Sample{Device: "tah_office", Metric: history.Temperature, At: start.Add(4 * time.Minute), Value: 15})
 		c.SetOpening("trv_office", 25)
 
-		d, err = c.Tick(t.Context(), start.Add(5*time.Minute))
+		d, err = c.Tick(t.Context(), start.Add(4*time.Minute))
 		require.NoError(t, err)
 		assert.Equal(t, "write limit", d[0].Reason)
 		assert.Equal(t, 25.0, v.set["trv_office"])

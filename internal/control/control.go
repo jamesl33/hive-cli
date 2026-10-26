@@ -57,7 +57,7 @@ func DefaultConfig() Config {
 		Window:     60 * time.Minute,
 		MinPoints:  6,
 		Stale:      30 * time.Minute,
-		WriteEvery: 30 * time.Minute,
+		WriteEvery: 5 * time.Minute,
 		WriteMin:   15,
 		Round:      5,
 	}
