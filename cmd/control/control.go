@@ -242,25 +242,20 @@ func runTick(ctx context.Context, ctrl *control.Controller, now time.Time) {
 	}
 
 	for _, d := range decisions {
-		logDecision(d)
+		slog.Info(
+			"tick",
+			"room", d.Room,
+			"temp", d.Temperature,
+			"rate", d.Rate,
+			"predicted", d.Predicted,
+			"target", d.Target,
+			"opening", d.Opening,
+			"current", d.Current,
+			"stale", d.Stale,
+			"written", d.Written,
+			"reason", d.Reason,
+		)
 	}
-}
-
-// logDecision logs what the controller did for a room.
-func logDecision(d control.Decision) {
-	slog.Info(
-		"tick",
-		"room", d.Room,
-		"temp", d.Temperature,
-		"rate", d.Rate,
-		"predicted", d.Predicted,
-		"target", d.Target,
-		"opening", d.Opening,
-		"current", d.Current,
-		"stale", d.Stale,
-		"written", d.Written,
-		"reason", d.Reason,
-	)
 }
 
 // parseRooms returns the rooms to control and observe.
