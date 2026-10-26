@@ -47,19 +47,51 @@ type Config struct {
 	Round float64
 }
 
+const (
+	// defaultKp is 50% of closing for each °C the room warms.
+	defaultKp = 50
+
+	// defaultLo is 0.5°C below the target, where the valve starts to close.
+	defaultLo = 0.5
+
+	// defaultMin is the smallest opening in percent, so the boiler never runs against closed valves.
+	defaultMin = 10
+
+	// defaultLead is 20 minutes of looking ahead at the rate the room is warming at.
+	defaultLead = 20 * time.Minute
+
+	// defaultWindow is the hour of readings which the rate is worked out from.
+	defaultWindow = time.Hour
+
+	// defaultMinPoints is the fewest readings in the window to trust the rate.
+	defaultMinPoints = 6
+
+	// defaultStale is the 30 minutes of silence after which the valve of a sensor is opened fully.
+	defaultStale = 30 * time.Minute
+
+	// defaultWriteEvery is the shortest time between writes to one valve, as they run on batteries.
+	defaultWriteEvery = 5 * time.Minute
+
+	// defaultWriteMin is the smallest change in opening in percent which is worth a write.
+	defaultWriteMin = 15
+
+	// defaultRound is what openings are rounded to in percent.
+	defaultRound = 5
+)
+
 // DefaultConfig returns a slow configuration, which is meant to be tuned from the logs.
 func DefaultConfig() Config {
 	c := Config{
-		Kp:         50,
-		Lo:         0.5,
-		Min:        10,
-		Lead:       20 * time.Minute,
-		Window:     60 * time.Minute,
-		MinPoints:  6,
-		Stale:      30 * time.Minute,
-		WriteEvery: 5 * time.Minute,
-		WriteMin:   15,
-		Round:      5,
+		Kp:         defaultKp,
+		Lo:         defaultLo,
+		Min:        defaultMin,
+		Lead:       defaultLead,
+		Window:     defaultWindow,
+		MinPoints:  defaultMinPoints,
+		Stale:      defaultStale,
+		WriteEvery: defaultWriteEvery,
+		WriteMin:   defaultWriteMin,
+		Round:      defaultRound,
 	}
 
 	return c
