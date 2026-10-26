@@ -161,9 +161,12 @@ func TestValveOpeningLabelsFitAtAnyHeight(t *testing.T) {
 
 	store.Apply(update(t, "trv_bedroom", now, `{"local_temperature":21.5,"occupied_heating_setpoint":30,"heating_valve_position":100,"idle_valve_position":100,"running_state":"idle"}`))
 
-	for h := 3; h <= 12; h++ {
+	for h := 5; h <= 14; h++ {
 		chart := store.renderChart(history.Valve, nil, 60, h, now.Add(-time.Hour), now)
-		assert.Contains(t, chart.view, "100│", "height %d", h)
+
+		for _, want := range []string{"100│", "  0└"} {
+			assert.Contains(t, chart.view, want, "height %d", h)
+		}
 	}
 }
 

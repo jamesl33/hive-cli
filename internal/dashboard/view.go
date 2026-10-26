@@ -198,11 +198,10 @@ func (s *Store) renderChart(metric history.Metric, hide map[string]bool, w, h in
 	}
 
 	lo, hi := valueRange(from, byDevice, targets)
-	label := "%.1f"
+	label := func(_ int, v float64) string { return fmt.Sprintf("%.1f", v) }
 
 	if metric == history.Valve {
-		// The labels are padded to the same width, as the chart only makes room for the labels it counts
-		lo, hi, label = 0, 100, "%3.0f"
+		lo, hi, label = 0, 100, func(int, float64) string { return strings.Repeat(" ", percentWidth) }
 	}
 
 	fresh := func() timeserieslinechart.Model {
@@ -210,7 +209,7 @@ func (s *Store) renderChart(metric history.Metric, hide map[string]bool, w, h in
 			timeserieslinechart.WithTimeRange(from, to),
 			timeserieslinechart.WithYRange(lo, hi),
 			timeserieslinechart.WithXYSteps(1, 4),
-			timeserieslinechart.WithYLabelFormatter(func(_ int, v float64) string { return fmt.Sprintf(label, v) }),
+			timeserieslinechart.WithYLabelFormatter(label),
 		)
 
 		c.XLabelFormatter = tickLabels(tickStep(to.Sub(from)), to.Sub(from)/time.Duration(c.GraphWidth()))
@@ -237,7 +236,41 @@ func (s *Store) renderChart(metric history.Metric, hide map[string]bool, w, h in
 
 	c := drawPlots(fresh, plots)
 
+	if metric == history.Valve {
+		percentLabels(&c)
+	}
+
 	return chart{view: c.View(), left: c.Origin().X + 1, width: c.GraphWidth()}
+}
+
+const (
+	// percentWidth is the width of the labels of a chart from 0 to 100, which fits 100.
+	percentWidth = 3
+
+	// percentStep is the percent between the labels of a chart from 0 to 100.
+	percentStep = 20
+)
+
+// percentLabels labels the axis of a chart from 0 to 100 at every percentStep. The chart places labels
+// by row, which rarely fall on round values, so they are drawn here instead. A label whose row already
+// has one is left out when the chart is too short for them all.
+func percentLabels(c *timeserieslinechart.Model) {
+	rows := c.GraphHeight()
+	used := map[int]bool{}
+
+	for v := 0; v <= 100; v += percentStep {
+		i := int(math.Round(float64(v) / 100 * float64(rows)))
+		if used[i] {
+			continue
+		}
+
+		used[i] = true
+
+		label := fmt.Sprintf("%*d", percentWidth, v)
+		at := canvas.Point{X: c.Origin().X - len(label), Y: c.Origin().Y - i}
+
+		c.Canvas.SetStringWithStyle(at, label, c.LabelStyle)
+	}
 }
 
 // plot is a line of a chart.
