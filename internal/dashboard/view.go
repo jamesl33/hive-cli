@@ -726,10 +726,26 @@ func (s *Store) legend(now time.Time, hide map[string]bool, picking group) strin
 	return strings.Join(lines, "\n")
 }
 
+// namePrefixes are the prefixes which name the kind of a device, e.g. "tah_lounge". The legend groups
+// devices by kind so it leaves them out.
+var namePrefixes = []string{"hive_", "tah_", "trv_"}
+
+// displayName returns the name of the device without its kind prefix.
+func displayName(device string) string {
+	for _, prefix := range namePrefixes {
+		name, ok := strings.CutPrefix(device, prefix)
+		if ok {
+			return name
+		}
+	}
+
+	return device
+}
+
 // legendEntry returns the legend entry of the device at the position i in the order, and the position
 // k in its group, which gives its letter.
 func (s *Store) legendEntry(i, k int, device string, now time.Time, hidden bool) string {
-	text := device
+	text := displayName(device)
 
 	if p, ok := s.Series[history.Temperature][device].Last(); ok {
 		text += fmt.Sprintf(" %.1f°C", p.Value)

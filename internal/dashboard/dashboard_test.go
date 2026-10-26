@@ -136,18 +136,18 @@ func TestLegendGroupsDevices(t *testing.T) {
 	s := NewStore(receiver)
 	now := time.Unix(100000, 0)
 
-	s.Apply(update(t, "bedroom-trv", now, `{"local_temperature":21.5,"occupied_heating_setpoint":30,"heating_valve_position":100,"idle_valve_position":100,"running_state":"idle"}`))
+	s.Apply(update(t, "trv_bedroom", now, `{"local_temperature":21.5,"occupied_heating_setpoint":30,"heating_valve_position":100,"idle_valve_position":100,"running_state":"idle"}`))
 	s.Apply(update(t, "bedroom", now, `{"temperature":17.2}`))
 	s.Apply(update(t, "aaa", now, `{"temperature":18}`))
 
-	assert.Equal(t, []string{"aaa", "bedroom", "bedroom-trv"}, s.Order)
+	assert.Equal(t, []string{"aaa", "bedroom", "trv_bedroom"}, s.Order)
 
 	lines := strings.Split(s.legend(now, nil, groupNone), "\n")
 
 	require.Len(t, lines, 2)
 	assert.Contains(t, lines[0], "Sensors")
 	assert.Contains(t, lines[1], "TRVs")
-	assert.Contains(t, lines[1], "a ● bedroom-trv 21.5°C 30.0°C 100%")
+	assert.Contains(t, lines[1], "a ● bedroom 21.5°C 30.0°C 100%")
 }
 
 func TestLegendListsThermostatWithReceiver(t *testing.T) {
@@ -616,4 +616,11 @@ func TestReportsSensorHasNoValve(t *testing.T) {
 	for _, s := range r.Samples(update(t, "hall", time.Unix(1, 0), `{"temperature":19,"running_state":"idle"}`)) {
 		assert.Equal(t, history.Temperature, s.Metric)
 	}
+}
+
+func TestDisplayName(t *testing.T) {
+	assert.Equal(t, "lounge", displayName("tah_lounge"))
+	assert.Equal(t, "lounge", displayName("trv_lounge"))
+	assert.Equal(t, "receiver", displayName("hive_receiver"))
+	assert.Equal(t, "lounge", displayName("lounge"))
 }
