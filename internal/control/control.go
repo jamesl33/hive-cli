@@ -139,9 +139,6 @@ type Controller struct {
 
 	// target is the target of the thermostat, nil until it has been seen.
 	target *float64
-
-	// boilerOn is whether the boiler is firing.
-	boilerOn bool
 }
 
 // roomState is what the controller remembers about a room.
@@ -183,16 +180,14 @@ func New(cfg Config, rooms []Room, valves Valves) *Controller {
 	return c
 }
 
-// Add takes in a measurement: the temperature of a sensor, or the target and boiler state of the
-// thermostat. Anything else is ignored.
+// Add takes in a measurement: the temperature of a sensor, or the target of the thermostat. Anything
+// else is ignored.
 func (c *Controller) Add(s history.Sample) {
 	switch s.Metric {
 	case history.Temperature:
 		c.temps[s.Device] = reading{value: s.Value, at: s.At}
 	case history.Target:
 		c.target = &s.Value
-	case history.Boiler:
-		c.boilerOn = s.Value == history.BoilerOn
 	}
 }
 
@@ -328,8 +323,6 @@ func (c *Controller) blocked(rs *roomState, now time.Time, d Decision, urgent bo
 		return "within write step"
 	case urgent:
 		return ""
-	case !c.boilerOn:
-		return "boiler off"
 	case !rs.lastWrite.IsZero() && now.Sub(rs.lastWrite) < c.cfg.WriteEvery:
 		return "write limit"
 	}

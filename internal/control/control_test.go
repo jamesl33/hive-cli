@@ -35,7 +35,7 @@ func (r *recorder) SetOpening(_ context.Context, valve string, percent float64) 
 
 var office = Room{Name: "office", Sensor: "tah_office", Valve: "trv_office"}
 
-// rig creates a controller for the office with the thermostat at 16.5 °C and the boiler firing.
+// rig creates a controller for the office with the thermostat at 16.5 °C.
 func rig(valves Valves, rooms ...Room) *Controller {
 	if len(rooms) == 0 {
 		rooms = []Room{office}
@@ -43,7 +43,6 @@ func rig(valves Valves, rooms ...Room) *Controller {
 
 	c := New(DefaultConfig(), rooms, valves)
 	c.Add(history.Sample{Device: "hive_receiver", Metric: history.Target, At: start, Value: 16.5})
-	c.Add(history.Sample{Device: "hive_receiver", Metric: history.Boiler, At: start, Value: history.BoilerOn})
 
 	return c
 }
@@ -138,17 +137,6 @@ func TestWriteLimits(t *testing.T) {
 		assert.Empty(t, v.set)
 	})
 
-	t.Run("boiler off", func(t *testing.T) {
-		v := &recorder{}
-		c := rig(v)
-		c.Add(history.Sample{Metric: history.Boiler, Value: history.BoilerIdle})
-
-		d := run(t, c, 30, steady(17.5))[0]
-
-		assert.Equal(t, "boiler off", d.Reason)
-		assert.Empty(t, v.set)
-	})
-
 	t.Run("a write is not repeated within the limit", func(t *testing.T) {
 		v := &recorder{}
 		c := rig(v)
@@ -207,10 +195,9 @@ func TestStaleSensorOpensFully(t *testing.T) {
 	assert.Equal(t, 100.0, v.set["trv_office"])
 }
 
-func TestStaleSensorIgnoresBoilerAndLimit(t *testing.T) {
+func TestStaleSensorIgnoresWriteLimit(t *testing.T) {
 	v := &recorder{}
 	c := rig(v)
-	c.Add(history.Sample{Metric: history.Boiler, Value: history.BoilerIdle})
 	c.SetOpening("trv_office", 25)
 	c.rooms[0].lastWrite = start
 
