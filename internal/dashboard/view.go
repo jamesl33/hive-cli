@@ -198,6 +198,9 @@ func (s *Store) renderChart(metric history.Metric, hide map[string]bool, w, h in
 	}
 
 	lo, hi := valueRange(from, byDevice, targets)
+	if metric == history.Valve {
+		lo, hi = 0, 100
+	}
 
 	fresh := func() timeserieslinechart.Model {
 		c := timeserieslinechart.New(w, h,

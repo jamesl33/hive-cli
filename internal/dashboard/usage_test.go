@@ -151,6 +151,8 @@ func TestValvesPageDrawsTheValveCharts(t *testing.T) {
 	}
 
 	assert.NotContains(t, view, "hall")
+	assert.Contains(t, view, "100.0│")
+	assert.Contains(t, view, "  0.0└")
 }
 
 func TestViewPutsHumidityBelowTemperature(t *testing.T) {
