@@ -14,6 +14,10 @@ type DeviceSummary struct {
 	// Device is the friendly name of the device.
 	Device string
 
+	// Room is whether the temperature is of a room, which is every device but the outdoor sensor and the
+	// radiator valves.
+	Room bool
+
 	// Mean is the temperature averaged over the time it was known.
 	Mean float64
 
@@ -30,13 +34,20 @@ type DeviceSummary struct {
 	span float64
 }
 
+// Group is the devices of one kind which have a temperature in a period.
+type Group struct {
+	// Name is the name of the group, e.g. "Sensors".
+	Name string
+
+	// Devices is the summary of each device, by name.
+	Devices []DeviceSummary
+}
+
 // Summary is a period of recorded history boiled down.
 type Summary struct {
-	// Rooms is the temperature of every device but the outdoor one, by name.
-	Rooms []DeviceSummary
-
-	// Outdoors is the outdoor device, if it has any history in the period.
-	Outdoors *DeviceSummary
+	// Groups is the temperature of each device, in the groups of the dashboard legend. Groups with no
+	// devices are left out.
+	Groups []Group
 
 	// SpreadMean is the difference between the warmest and coolest room averaged over the time at
 	// least two rooms had a temperature.
@@ -60,6 +71,7 @@ type Summary struct {
 // from before from set the starting values.
 func Summarize(samples []history.Sample, outdoors string, from, to time.Time) Summary {
 	t := newTally(outdoors, from)
+	t.classify(samples)
 
 	for _, s := range samples {
 		if s.At.After(to) {
@@ -78,6 +90,12 @@ func Summarize(samples []history.Sample, outdoors string, from, to time.Time) Su
 type tally struct {
 	// outdoors is the device which is left out of the spread.
 	outdoors string
+
+	// valves is the radiator valves, which have a valve position.
+	valves map[string]bool
+
+	// receivers is the Hive receivers, which report the boiler.
+	receivers map[string]bool
 
 	// from is when the period starts, which samples from before it can't count runs before.
 	from time.Time
@@ -116,16 +134,31 @@ type tally struct {
 // newTally returns a tally of the period which starts at from.
 func newTally(outdoors string, from time.Time) *tally {
 	t := tally{
-		outdoors: outdoors,
-		from:     from,
-		prev:     from,
-		stats:    make(map[string]*DeviceSummary),
-		current:  make(map[string]float64),
-		boiler:   history.BoilerOff,
-		fuels:    make(map[history.Metric]float64),
+		outdoors:  outdoors,
+		from:      from,
+		prev:      from,
+		valves:    make(map[string]bool),
+		receivers: make(map[string]bool),
+		stats:     make(map[string]*DeviceSummary),
+		current:   make(map[string]float64),
+		boiler:    history.BoilerOff,
+		fuels:     make(map[history.Metric]float64),
 	}
 
 	return &t
+}
+
+// classify finds which devices are radiator valves and which are receivers. It looks at every sample
+// first as a device may only show what it is after its first temperature.
+func (t *tally) classify(samples []history.Sample) {
+	for _, s := range samples {
+		switch s.Metric {
+		case history.Valve:
+			t.valves[s.Device] = true
+		case history.Boiler:
+			t.receivers[s.Device] = true
+		}
+	}
 }
 
 // apply adds up the time before the sample, then takes in what the sample says.
@@ -173,7 +206,7 @@ func (t *tally) account(until time.Time) {
 	for device, v := range t.current {
 		t.record(device, v, secs)
 
-		if device == t.outdoors {
+		if !t.isRoom(device) {
 			continue
 		}
 
@@ -207,6 +240,11 @@ func (t *tally) record(device string, v, secs float64) {
 	d.Max = math.Max(d.Max, v)
 }
 
+// isRoom says whether the temperature of the device is of a room.
+func (t *tally) isRoom(device string) bool {
+	return device != t.outdoors && !t.valves[device]
+}
+
 // summary returns what has been added up.
 func (t *tally) summary() Summary {
 	s := Summary{SpreadMax: t.spreadMax, BoilerOn: t.boilerOn, BoilerRuns: t.boilerRuns, Fuels: t.fuels}
@@ -215,24 +253,36 @@ func (t *tally) summary() Summary {
 		s.SpreadMean = t.spreadSum / t.spreadSpan
 	}
 
+	groups := make([][]DeviceSummary, len(groupNames))
+
 	for _, d := range t.stats {
-		t.place(&s, d)
+		d.Mean = d.sum / d.span
+		d.Room = t.isRoom(d.Device)
+
+		g := t.group(d.Device)
+		groups[g] = append(groups[g], *d)
 	}
 
-	slices.SortFunc(s.Rooms, func(a, b DeviceSummary) int { return cmp.Compare(a.Device, b.Device) })
+	for g, devices := range groups {
+		if len(devices) == 0 {
+			continue
+		}
+
+		slices.SortFunc(devices, func(a, b DeviceSummary) int { return cmp.Compare(a.Device, b.Device) })
+		s.Groups = append(s.Groups, Group{Name: groupNames[g], Devices: devices})
+	}
 
 	return s
 }
 
-// place works out the mean of a device and puts it in the summary, as the outdoor device or a room.
-func (t *tally) place(s *Summary, d *DeviceSummary) {
-	d.Mean = d.sum / d.span
-
-	if d.Device == t.outdoors {
-		s.Outdoors = d
-
-		return
+// group says which group of the legend the device is in.
+func (t *tally) group(device string) group {
+	switch {
+	case t.receivers[device]:
+		return groupReceiver
+	case t.valves[device]:
+		return groupValves
 	}
 
-	s.Rooms = append(s.Rooms, *d)
+	return groupSensors
 }

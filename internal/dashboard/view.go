@@ -730,8 +730,8 @@ func (s *Store) legend(now time.Time, hide map[string]bool, picking group) strin
 // devices by kind so it leaves them out.
 var namePrefixes = []string{"hive_", "tah_", "trv_"}
 
-// displayName returns the name of the device without its kind prefix.
-func displayName(device string) string {
+// DisplayName returns the name of the device without its kind prefix.
+func DisplayName(device string) string {
 	for _, prefix := range namePrefixes {
 		name, ok := strings.CutPrefix(device, prefix)
 		if ok {
@@ -745,7 +745,7 @@ func displayName(device string) string {
 // legendEntry returns the legend entry of the device at the position i in the order, and the position
 // k in its group, which gives its letter.
 func (s *Store) legendEntry(i, k int, device string, now time.Time, hidden bool) string {
-	text := displayName(device)
+	text := DisplayName(device)
 
 	if p, ok := s.Series[history.Temperature][device].Last(); ok {
 		text += fmt.Sprintf(" %.1f°C", p.Value)

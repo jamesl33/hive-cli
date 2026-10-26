@@ -16,6 +16,9 @@ func TestSummarize(t *testing.T) {
 
 	samples := []history.Sample{
 		sample("lounge", history.Temperature, h(-1), 16), // Before the period: the starting value
+		sample("radiator", history.Temperature, h(0), 40),
+		sample("radiator", history.Valve, h(0), 100),
+		sample("hive", history.Temperature, h(0), 17),
 		sample("office", history.Temperature, h(0), 18),
 		sample("outdoors", history.Temperature, h(0), 8),
 		sample("hive", history.Boiler, h(1), history.BoilerOn),
@@ -27,16 +30,32 @@ func TestSummarize(t *testing.T) {
 
 	got := Summarize(samples, "outdoors", from, to)
 
-	require.Len(t, got.Rooms, 2)
-	assert.Equal(t, "lounge", got.Rooms[0].Device)
-	assert.Equal(t, 16.5, got.Rooms[0].Mean)
-	assert.Equal(t, 16.0, got.Rooms[0].Min)
-	assert.Equal(t, 17.0, got.Rooms[0].Max)
-	assert.Equal(t, "office", got.Rooms[1].Device)
-	assert.Equal(t, 17.5, got.Rooms[1].Mean)
-	require.NotNil(t, got.Outdoors)
-	assert.Equal(t, 8.0, got.Outdoors.Mean)
-	assert.InDelta(t, 1.0, got.SpreadMean, 1e-9) // 2h at 2°C, 2h at 0
+	require.Len(t, got.Groups, 3)
+	assert.Equal(t, "Hive", got.Groups[0].Name)
+	assert.Equal(t, "Sensors", got.Groups[1].Name)
+	assert.Equal(t, "TRVs", got.Groups[2].Name)
+
+	require.Len(t, got.Groups[0].Devices, 1)
+	assert.Equal(t, "hive", got.Groups[0].Devices[0].Device)
+
+	sensors := got.Groups[1].Devices
+	require.Len(t, sensors, 3)
+	assert.Equal(t, "lounge", sensors[0].Device)
+	assert.Equal(t, 16.5, sensors[0].Mean)
+	assert.Equal(t, 16.0, sensors[0].Min)
+	assert.Equal(t, 17.0, sensors[0].Max)
+	assert.True(t, sensors[0].Room)
+	assert.Equal(t, "office", sensors[1].Device)
+	assert.Equal(t, 17.5, sensors[1].Mean)
+	assert.Equal(t, "outdoors", sensors[2].Device)
+	assert.Equal(t, 8.0, sensors[2].Mean)
+	assert.False(t, sensors[2].Room)
+
+	require.Len(t, got.Groups[2].Devices, 1)
+	assert.Equal(t, "radiator", got.Groups[2].Devices[0].Device)
+	assert.False(t, got.Groups[2].Devices[0].Room)
+
+	assert.InDelta(t, 1.0, got.SpreadMean, 1e-9) // 2h at 2°C, 2h at 0, whatever the radiator reads
 	assert.Equal(t, 2.0, got.SpreadMax)
 	assert.Equal(t, 2*time.Hour, got.BoilerOn)
 	assert.Equal(t, 2, got.BoilerRuns)

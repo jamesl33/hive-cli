@@ -32,3 +32,24 @@ func TestWriteFooterAlignsFuels(t *testing.T) {
 
 	assert.Equal(t, want, buf.String())
 }
+
+func TestWriteGroupsDevices(t *testing.T) {
+	sum := dashboard.Summary{
+		Groups: []dashboard.Group{
+			{Name: "Sensors", Devices: []dashboard.DeviceSummary{{Device: "tah_lounge", Room: true, Mean: 16.5, Min: 16, Max: 17}}},
+			{Name: "TRVs", Devices: []dashboard.DeviceSummary{{Device: "trv_lounge", Mean: 40, Min: 39, Max: 41}}},
+		},
+	}
+
+	var buf bytes.Buffer
+
+	write(&buf, sum, "tah_outdoors", time.Unix(0, 0).UTC(), time.Unix(0, 0).UTC().Add(24*time.Hour))
+
+	out := buf.String()
+
+	assert.Contains(t, out, "Sensors\n  lounge")
+	assert.Contains(t, out, "max\nSensors\n  lounge")
+	assert.Contains(t, out, "\n\nTRVs\n  lounge")
+	assert.NotContains(t, out, "tah_")
+	assert.NotContains(t, out, "trv_")
+}

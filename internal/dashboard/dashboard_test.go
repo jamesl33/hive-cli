@@ -619,8 +619,8 @@ func TestReportsSensorHasNoValve(t *testing.T) {
 }
 
 func TestDisplayName(t *testing.T) {
-	assert.Equal(t, "lounge", displayName("tah_lounge"))
-	assert.Equal(t, "lounge", displayName("trv_lounge"))
-	assert.Equal(t, "receiver", displayName("hive_receiver"))
-	assert.Equal(t, "lounge", displayName("lounge"))
+	assert.Equal(t, "lounge", DisplayName("tah_lounge"))
+	assert.Equal(t, "lounge", DisplayName("trv_lounge"))
+	assert.Equal(t, "receiver", DisplayName("hive_receiver"))
+	assert.Equal(t, "lounge", DisplayName("lounge"))
 }

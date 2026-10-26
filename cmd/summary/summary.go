@@ -132,25 +132,35 @@ func (s *Summary) Run(w io.Writer, args []string) error {
 	return nil
 }
 
+// indent is how far the devices of a group are indented under its name.
+const indent = "  "
+
 // write writes the summary.
 func write(w io.Writer, sum dashboard.Summary, outdoors string, from, to time.Time) {
-	devices := slices.Clone(sum.Rooms)
-	if sum.Outdoors != nil {
-		devices = append(devices, *sum.Outdoors)
-	}
-
 	width := 0
-	for _, d := range devices {
-		width = max(width, lipgloss.Width(d.Device))
+
+	for _, g := range sum.Groups {
+		for _, d := range g.Devices {
+			width = max(width, lipgloss.Width(dashboard.DisplayName(d.Device)))
+		}
 	}
 
-	name := lipgloss.NewStyle().Width(width + 2)
+	name := lipgloss.NewStyle().Width(len(indent) + width + 2)
 	styles := rowStyles(sum, outdoors)
 
 	writeHeader(w, name, from, to)
 
-	for _, d := range devices {
-		writeRow(w, name, styles[d.Device], d)
+	for i, g := range sum.Groups {
+		// A blank line sets each group apart from the one before.
+		if i > 0 {
+			fmt.Fprintln(w)
+		}
+
+		fmt.Fprintln(w, bold.Render(g.Name))
+
+		for _, d := range g.Devices {
+			writeRow(w, name, styles[d.Device], d)
+		}
 	}
 
 	writeFooter(w, sum)
@@ -160,13 +170,24 @@ func write(w io.Writer, sum dashboard.Summary, outdoors string, from, to time.Ti
 // outdoor sensor. Every other row is left plain.
 func rowStyles(sum dashboard.Summary, outdoors string) map[string]lipgloss.Style {
 	styles := map[string]lipgloss.Style{outdoors: dim}
-	if len(sum.Rooms) < 2 {
+
+	var rooms []dashboard.DeviceSummary
+
+	for _, g := range sum.Groups {
+		for _, d := range g.Devices {
+			if d.Room {
+				rooms = append(rooms, d)
+			}
+		}
+	}
+
+	if len(rooms) < 2 {
 		return styles
 	}
 
 	byMean := func(a, b dashboard.DeviceSummary) int { return cmp.Compare(a.Mean, b.Mean) }
-	hot := slices.MaxFunc(sum.Rooms, byMean)
-	cold := slices.MinFunc(sum.Rooms, byMean)
+	hot := slices.MaxFunc(rooms, byMean)
+	cold := slices.MinFunc(rooms, byMean)
 
 	if hot.Mean == cold.Mean {
 		return styles
@@ -203,7 +224,7 @@ func writeHeader(w io.Writer, name lipgloss.Style, from, to time.Time) {
 // writeRow writes the mean, min and max of a device in the style. Each cell is styled on its own, as the
 // reset after the bold mean would end the colour.
 func writeRow(w io.Writer, name, style lipgloss.Style, d dashboard.DeviceSummary) {
-	label := style.Inherit(name).Render(d.Device)
+	label := style.Inherit(name).Render(indent + dashboard.DisplayName(d.Device))
 	mean := style.Inherit(cell).Bold(true).Render(fmt.Sprintf("%.1f", d.Mean))
 	lo := style.Inherit(cell).Render(fmt.Sprintf("%.1f", d.Min))
 	hi := style.Inherit(cell).Render(fmt.Sprintf("%.1f", d.Max))
