@@ -149,7 +149,12 @@ func write(w io.Writer, sum dashboard.Summary, outdoors string, from, to time.Ti
 	styles := rowStyles(sum, outdoors)
 
 	writeHeader(w, name, from, to)
+	writeGroups(w, sum, name, styles)
+	writeFooter(w, sum)
+}
 
+// writeGroups writes the rows of each group under its name.
+func writeGroups(w io.Writer, sum dashboard.Summary, name lipgloss.Style, styles map[string]lipgloss.Style) {
 	for i, g := range sum.Groups {
 		// A blank line sets each group apart from the one before.
 		if i > 0 {
@@ -162,8 +167,6 @@ func write(w io.Writer, sum dashboard.Summary, outdoors string, from, to time.Ti
 			writeRow(w, name, styles[d.Device], d)
 		}
 	}
-
-	writeFooter(w, sum)
 }
 
 // rowStyles returns the style of the rows which stand out: the warmest and coolest room by mean, and the
