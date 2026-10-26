@@ -206,14 +206,7 @@ func (c *Control) process(ctx context.Context, feed *z2m.Feed, ctrl *control.Con
 		case <-ctx.Done():
 			return nil
 		case u := <-updates:
-			for _, s := range reports.Samples(u) {
-				ctrl.Add(s)
-			}
-
-			open, ok := u.Payload["heating_valve_position"].(float64)
-			if ok {
-				ctrl.SetOpening(u.Device, open)
-			}
+			take(ctrl, reports, u)
 
 			if !ticked && ctrl.Ready() {
 				ticked = true
@@ -226,6 +219,18 @@ func (c *Control) process(ctx context.Context, feed *z2m.Feed, ctrl *control.Con
 
 			runTick(ctx, ctrl, now)
 		}
+	}
+}
+
+// take gives the controller the measurements in a report, and the opening if it is from a valve.
+func take(ctrl *control.Controller, reports *dashboard.Reports, u z2m.Update) {
+	for _, s := range reports.Samples(u) {
+		ctrl.Add(s)
+	}
+
+	open, ok := u.Payload["heating_valve_position"].(float64)
+	if ok {
+		ctrl.SetOpening(u.Device, open)
 	}
 }
 
