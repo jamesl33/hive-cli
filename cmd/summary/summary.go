@@ -174,16 +174,7 @@ func writeGroups(w io.Writer, sum dashboard.Summary, name lipgloss.Style, styles
 func rowStyles(sum dashboard.Summary, outdoors string) map[string]lipgloss.Style {
 	styles := map[string]lipgloss.Style{outdoors: dim}
 
-	var rooms []dashboard.DeviceSummary
-
-	for _, g := range sum.Groups {
-		for _, d := range g.Devices {
-			if d.Room {
-				rooms = append(rooms, d)
-			}
-		}
-	}
-
+	rooms := roomDevices(sum)
 	if len(rooms) < 2 {
 		return styles
 	}
@@ -200,6 +191,21 @@ func rowStyles(sum dashboard.Summary, outdoors string) map[string]lipgloss.Style
 	styles[cold.Device] = cool
 
 	return styles
+}
+
+// roomDevices returns the devices of the summary which measure a room.
+func roomDevices(sum dashboard.Summary) []dashboard.DeviceSummary {
+	var rooms []dashboard.DeviceSummary
+
+	for _, g := range sum.Groups {
+		for _, d := range g.Devices {
+			if d.Room {
+				rooms = append(rooms, d)
+			}
+		}
+	}
+
+	return rooms
 }
 
 // writeHeader writes the days, when they end if not whole and the column names.
