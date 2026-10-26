@@ -110,6 +110,7 @@ func NewControl(options *z2m.Options) *cobra.Command {
 		"smallest change in percent worth a write",
 	)
 
+	// TODO(jamesl33): Extract the default rooms, they are only right for my house.
 	flags.StringArrayVar(
 		&c.rooms,
 		"room",
@@ -117,6 +118,7 @@ func NewControl(options *z2m.Options) *cobra.Command {
 		"room to control, as name=sensor:valve; repeat for each room",
 	)
 
+	// TODO(jamesl33): Extract the default observed rooms, they are only right for my house.
 	flags.StringArrayVar(
 		&c.observe,
 		"observe",
