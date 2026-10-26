@@ -757,17 +757,17 @@ func (s *Store) legendEntry(i, k int, device string, now time.Time, hidden bool)
 			targetStyle = style
 		}
 
-		part += targetStyle.Render(fmt.Sprintf(" (target %.1f°C%s)", p.Value, s.gap(device, p.Value)))
+		part += targetStyle.Render(fmt.Sprintf(" (%.1f°C%s)", p.Value, s.gap(device, p.Value)))
 	}
 
 	text = ""
 
 	if p, ok := s.Series[history.Setpoint][device].Last(); ok {
-		text += fmt.Sprintf(" set %.1f°C", p.Value)
+		text += fmt.Sprintf(" %.1f°C", p.Value)
 	}
 
 	if p, ok := s.Series[history.Valve][device].Last(); ok {
-		text += fmt.Sprintf(" valve %.0f%%", p.Value)
+		text += fmt.Sprintf(" %.0f%%", p.Value)
 	}
 
 	if p, ok := s.Series[history.Humidity][device].Last(); ok {

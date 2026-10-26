@@ -147,7 +147,7 @@ func TestLegendGroupsDevices(t *testing.T) {
 	require.Len(t, lines, 2)
 	assert.Contains(t, lines[0], "Sensors")
 	assert.Contains(t, lines[1], "TRVs")
-	assert.Contains(t, lines[1], "a ● bedroom-trv 21.5°C set 30.0°C valve 100%")
+	assert.Contains(t, lines[1], "a ● bedroom-trv 21.5°C 30.0°C 100%")
 }
 
 func TestLegendListsThermostatWithReceiver(t *testing.T) {
@@ -355,7 +355,7 @@ func TestStoreRecordsTarget(t *testing.T) {
 	target, ok := s.Series[history.Target]["hive"].Last()
 	require.True(t, ok)
 	assert.Equal(t, 20.5, target.Value)
-	assert.Contains(t, s.legend(time.Unix(2, 0), nil, groupNone), "target 20.5°C")
+	assert.Contains(t, s.legend(time.Unix(2, 0), nil, groupNone), "(20.5°C")
 }
 
 func TestBoxClipsAndPads(t *testing.T) {
