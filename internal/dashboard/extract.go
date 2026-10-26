@@ -261,10 +261,12 @@ func valveSamples(u z2m.Update, state map[string]any) []history.Sample {
 	}
 
 	// The positions are logged as reported, so the log shows which of them the valve follows
-	samples = append(samples, readingsAs(u, map[string]history.Metric{
+	positions := map[string]history.Metric{
 		"heating_valve_position": history.ValveHeating,
 		"idle_valve_position":    history.ValveIdle,
-	})...)
+	}
+
+	samples = append(samples, readingsAs(u, positions)...)
 
 	run, running := u.Payload["running_state"]
 	if running {
