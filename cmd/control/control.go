@@ -260,22 +260,32 @@ func runTick(ctx context.Context, ctrl *control.Controller, now time.Time) {
 
 // parseRooms returns the rooms to control and observe.
 func (c *Control) parseRooms() ([]control.Room, error) {
+	rooms, err := parseSpecs(c.rooms, false)
+	if err != nil {
+		return nil, err
+	}
+
+	observed, err := parseSpecs(c.observe, true)
+	if err != nil {
+		return nil, err
+	}
+
+	return append(rooms, observed...), nil
+}
+
+// parseSpecs parses rooms given as name=sensor:valve, which are only observed if observe is set.
+func parseSpecs(specs []string, observe bool) ([]control.Room, error) {
 	var rooms []control.Room
 
-	for _, group := range []struct {
-		specs   []string
-		observe bool
-	}{{c.rooms, false}, {c.observe, true}} {
-		for _, spec := range group.specs {
-			r, err := parseRoom(spec)
-			if err != nil {
-				return nil, err
-			}
-
-			r.Observe = group.observe
-
-			rooms = append(rooms, r)
+	for _, spec := range specs {
+		r, err := parseRoom(spec)
+		if err != nil {
+			return nil, err
 		}
+
+		r.Observe = observe
+
+		rooms = append(rooms, r)
 	}
 
 	return rooms, nil
