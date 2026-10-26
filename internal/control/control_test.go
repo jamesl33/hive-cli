@@ -233,6 +233,20 @@ func TestNoTargetNoWrites(t *testing.T) {
 	assert.Empty(t, v.set)
 }
 
+func TestReady(t *testing.T) {
+	c := New(DefaultConfig(), []Room{office}, &recorder{})
+	assert.False(t, c.Ready())
+
+	c.Add(history.Sample{Device: "hive_receiver", Metric: history.Target, At: start, Value: 16.5})
+	assert.False(t, c.Ready())
+
+	c.Add(history.Sample{Device: "tah_bedroom", Metric: history.Temperature, At: start, Value: 16})
+	assert.False(t, c.Ready())
+
+	c.Add(history.Sample{Device: "tah_office", Metric: history.Temperature, At: start, Value: 16})
+	assert.True(t, c.Ready())
+}
+
 func TestRestore(t *testing.T) {
 	v := &recorder{}
 	c := rig(v, office, Room{Name: "landing", Sensor: "tah_landing", Valve: "trv_landing"})

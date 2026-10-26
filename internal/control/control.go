@@ -201,6 +201,23 @@ func (c *Controller) SetOpening(valve string, percent float64) {
 	c.openings[valve] = percent
 }
 
+// Ready returns whether the controller has the target of the thermostat and a reading from the sensor
+// of every room.
+func (c *Controller) Ready() bool {
+	if c.target == nil {
+		return false
+	}
+
+	for _, rs := range c.rooms {
+		_, ok := c.temps[rs.Sensor]
+		if !ok {
+			return false
+		}
+	}
+
+	return true
+}
+
 // Tick works out every room and writes the valves which need it.
 func (c *Controller) Tick(ctx context.Context, now time.Time) ([]Decision, error) {
 	var (

@@ -126,6 +126,9 @@ func (c *Control) loop(ctx context.Context, feed *z2m.Feed, ctrl *control.Contro
 	t := time.NewTicker(c.tick)
 	defer t.Stop()
 
+	// The first tick is as soon as the first readings are in, not a whole interval after starting
+	ticked := false
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -145,16 +148,30 @@ func (c *Control) loop(ctx context.Context, feed *z2m.Feed, ctrl *control.Contro
 			if ok {
 				ctrl.SetOpening(u.Device, open)
 			}
-		case now := <-t.C:
-			decisions, err := ctrl.Tick(ctx, now)
-			if err != nil {
-				fmt.Fprintln(os.Stderr, err)
-			}
 
-			for _, d := range decisions {
-				logDecision(d)
+			if !ticked && ctrl.Ready() {
+				ticked = true
+
+				t.Reset(c.tick)
+				runTick(ctx, ctrl, time.Now())
 			}
+		case now := <-t.C:
+			ticked = true
+
+			runTick(ctx, ctrl, now)
 		}
+	}
+}
+
+// runTick works out the valves and logs what was decided for each room.
+func runTick(ctx context.Context, ctrl *control.Controller, now time.Time) {
+	decisions, err := ctrl.Tick(ctx, now)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+	}
+
+	for _, d := range decisions {
+		logDecision(d)
 	}
 }
 
