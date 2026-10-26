@@ -47,15 +47,14 @@ Check on it with `journalctl -u hive-record` and `ls -l /var/lib/hive`.
 
 ## Radiator valves
 
-`hive-control.timer` runs `hive-control.service` (`hive control`) every 5 minutes. Each run reads the last hour of the history, works out the opening of each room's TRV from the room sensor and the thermostat target, and writes the valves which need it: fully open until the room is 0.5°C below target, closing as it warms, down to 10%. It looks ahead using the rate the room is warming at, so the valve closes before the room reaches the target. A sensor silent for 30 minutes opens its valve fully.
+`hive-control.service` runs `hive control`. Each tick (5 minutes) it works out the opening of each room's TRV from the room sensor and the thermostat target: fully open until the room is 0.5°C below target, closing as it warms, down to 10%. It looks ahead using the rate the room is warming at, so the valve closes before the room reaches the target. A sensor silent for 30 minutes opens its valve fully.
 
-- It needs `hive-record.service`. Before each run it signals `hive record` (SIGUSR1) to write its readings to disk, so `systemctl kill` runs as root.
-- A valve is only written if its opening moved by 15% and has not changed in the last 30 minutes. Valves report a new opening late, so it can be written again until it does.
+- `ExecStopPost=… --restore` opens every valve again when the service stops or crashes, as TRVs keep their last opening if it dies.
 - Rooms are `--room name=sensor:valve`. `--observe` rooms are logged but never written (the lounge and stairs by default).
 - It does nothing while the thermostat has no target (heating off).
-- `journalctl -u hive-control -f` shows temperature, rate, wanted and current opening per room; `hive control --restore` opens every valve fully. Valves keep their last opening when the timer is stopped, so run it after `systemctl disable --now hive-control.timer`.
+- `journalctl -u hive-control -f` shows temperature, rate, wanted and current opening per room; `hive control --restore` opens every valve fully.
 
-Not installed by `install.sh`. Install with `sudo install -m 644 hive-control.service hive-control.timer /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl enable --now hive-control.timer`.
+Not installed by `install.sh`. Install with `sudo install -m 644 hive-control.service /etc/systemd/system/ && sudo systemctl enable --now hive-control`.
 
 ## Day to day
 

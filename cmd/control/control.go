@@ -4,20 +4,24 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/jamesl33/hive-cli/internal/control"
-	"github.com/jamesl33/hive-cli/internal/history"
+	"github.com/jamesl33/hive-cli/internal/dashboard"
 	"github.com/jamesl33/hive-cli/internal/z2m"
 	"github.com/spf13/cobra"
 )
+
+// restoreTimeout is how long to wait to open the valves when stopping.
+const restoreTimeout = 15 * time.Second
 
 // Control defines the struct for the control command.
 type Control struct {
 	options *z2m.Options
 	cfg     control.Config
-	dir     string
+	tick    time.Duration
 	restore bool
 	rooms   []string
 	observe []string
@@ -28,7 +32,7 @@ func NewControl(options *z2m.Options) *cobra.Command {
 	c := Control{options: options, cfg: control.DefaultConfig()}
 
 	cmd := cobra.Command{
-		Short: "Set the radiator valve of each room from its recorded temperatures, then exit",
+		Short: "Close the radiator valve of each room as it warms past the target",
 		Use:   "control",
 		Args:  cobra.NoArgs,
 		RunE:  func(cmd *cobra.Command, _ []string) error { return c.Run(cmd.Context()) },
@@ -43,11 +47,11 @@ func NewControl(options *z2m.Options) *cobra.Command {
 		"open every valve fully and exit",
 	)
 
-	flags.StringVar(
-		&c.dir,
-		"history",
-		z2m.Env("HIVE_HISTORY", history.DefaultDir()),
-		"directory the history is recorded in (HIVE_HISTORY)",
+	flags.DurationVar(
+		&c.tick,
+		"tick",
+		5*time.Minute,
+		"how often to work out the valves",
 	)
 
 	flags.Float64Var(
@@ -123,7 +127,7 @@ func NewControl(options *z2m.Options) *cobra.Command {
 	return &cmd
 }
 
-// Run works out the valves from the recorded history once and writes the ones which need it.
+// Run controls the valves until the context is cancelled.
 func (c *Control) Run(ctx context.Context) error {
 	rooms, err := c.parseRooms()
 	if err != nil {
@@ -136,30 +140,95 @@ func (c *Control) Run(ctx context.Context) error {
 	}
 	defer feed.Close()
 
+	if c.restore {
+		return control.New(c.cfg, rooms, feed).Restore(ctx)
+	}
+
 	ctrl := control.New(c.cfg, rooms, feed)
 
-	if c.restore {
-		return ctrl.Restore(ctx)
+	err = c.loop(ctx, feed, ctrl)
+
+	stop, cancel := context.WithTimeout(context.Background(), restoreTimeout)
+	defer cancel()
+
+	return joinErr(err, ctrl.Restore(stop))
+}
+
+// loop feeds the reports to the controller and works out the valves every tick until the context is
+// cancelled.
+func (c *Control) loop(ctx context.Context, feed *z2m.Feed, ctrl *control.Controller) error {
+	updates := make(chan z2m.Update)
+	failed := make(chan error, 1)
+
+	go func() {
+		for {
+			u, err := feed.Next(ctx)
+			if err != nil {
+				failed <- err
+
+				return
+			}
+
+			select {
+			case updates <- u:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
+	reports := dashboard.NewReports(feed.Receiver)
+
+	t := time.NewTicker(c.tick)
+	defer t.Stop()
+
+	// The first tick is as soon as the first readings are in, not a whole interval after starting
+	ticked := false
+
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case err := <-failed:
+			if ctx.Err() != nil {
+				return nil
+			}
+
+			return err
+		case u := <-updates:
+			for _, s := range reports.Samples(u) {
+				ctrl.Add(s)
+			}
+
+			open, ok := u.Payload["heating_valve_position"].(float64)
+			if ok {
+				ctrl.SetOpening(u.Device, open)
+			}
+
+			if !ticked && ctrl.Ready() {
+				ticked = true
+
+				t.Reset(c.tick)
+				runTick(ctx, ctrl, time.Now())
+			}
+		case now := <-t.C:
+			ticked = true
+
+			runTick(ctx, ctrl, now)
+		}
 	}
+}
 
-	now := time.Now()
-
-	samples, err := history.Load(c.dir, now.Add(-c.cfg.Window))
-	if err != nil {
-		return fmt.Errorf("failed to load history: %w", err)
-	}
-
-	for _, s := range samples {
-		ctrl.Add(s)
-	}
-
+// runTick works out the valves and logs what was decided for each room.
+func runTick(ctx context.Context, ctrl *control.Controller, now time.Time) {
 	decisions, err := ctrl.Tick(ctx, now)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+	}
 
 	for _, d := range decisions {
 		logDecision(d)
 	}
-
-	return err
 }
 
 // logDecision logs what the controller did for a room.
@@ -214,4 +283,13 @@ func parseRoom(spec string) (control.Room, error) {
 	r := control.Room{Name: name, Sensor: sensor, Valve: valve}
 
 	return r, nil
+}
+
+// joinErr returns the first error, as the second is only a failure to tidy up after it.
+func joinErr(err, other error) error {
+	if err != nil {
+		return err
+	}
+
+	return other
 }

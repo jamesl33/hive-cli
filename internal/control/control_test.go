@@ -47,26 +47,23 @@ func rig(valves Valves, rooms ...Room) *Controller {
 	return c
 }
 
-// run adds a reading of the office sensor every five minutes, as temp(minute), then ticks at the end.
+// run ticks every five minutes, with the sensor reading temp(minute) each time.
 func run(t *testing.T, c *Controller, minutes int, temp func(minute int) float64) []Decision {
 	t.Helper()
 
+	var last []Decision
+
 	for m := 0; m <= minutes; m += 5 {
-		c.Add(history.Sample{Device: "tah_office", Metric: history.Temperature, At: at(m), Value: temp(m)})
+		now := start.Add(time.Duration(m) * time.Minute)
+		c.Add(history.Sample{Device: "tah_office", Metric: history.Temperature, At: now, Value: temp(m)})
+
+		var err error
+
+		last, err = c.Tick(t.Context(), now)
+		require.NoError(t, err)
 	}
 
-	d, err := c.Tick(t.Context(), at(minutes))
-	require.NoError(t, err)
-
-	return d
-}
-
-// at returns the time which is the minutes after the start.
-func at(minutes int) time.Time { return start.Add(time.Duration(minutes) * time.Minute) }
-
-// opened records that the office valve changed to the percent at the time.
-func opened(c *Controller, percent float64, when time.Time) {
-	c.Add(history.Sample{Device: "trv_office", Metric: history.Valve, At: when, Value: percent})
+	return last
 }
 
 func steady(v float64) func(int) float64 { return func(int) float64 { return v } }
@@ -132,7 +129,7 @@ func TestWriteLimits(t *testing.T) {
 	t.Run("a small change is not worth a write", func(t *testing.T) {
 		v := &recorder{}
 		c := rig(v)
-		opened(c, 75, at(-60))
+		c.SetOpening("trv_office", 75)
 
 		d := run(t, c, 30, steady(16.5))[0]
 
@@ -140,32 +137,28 @@ func TestWriteLimits(t *testing.T) {
 		assert.Empty(t, v.set)
 	})
 
-	t.Run("a valve which changed within the limit is not written", func(t *testing.T) {
+	t.Run("a write is not repeated within the limit", func(t *testing.T) {
 		v := &recorder{}
 		c := rig(v)
-		opened(c, 100, at(25))
 
-		d := run(t, c, 30, steady(17.5))[0]
+		c.Add(history.Sample{Device: "tah_office", Metric: history.Temperature, At: start, Value: 17.5})
 
-		assert.Equal(t, "write limit", d.Reason)
-		assert.Empty(t, v.set)
-	})
+		d, err := c.Tick(t.Context(), start)
+		require.NoError(t, err)
+		assert.True(t, d[0].Written)
 
-	t.Run("a valve which changed before the limit is written", func(t *testing.T) {
-		v := &recorder{}
-		c := rig(v)
-		opened(c, 100, at(-1))
+		c.Add(history.Sample{Device: "tah_office", Metric: history.Temperature, At: start.Add(5 * time.Minute), Value: 15})
+		c.SetOpening("trv_office", 25)
 
-		d := run(t, c, 30, steady(17.5))[0]
-
-		assert.True(t, d.Written)
+		d, err = c.Tick(t.Context(), start.Add(5*time.Minute))
+		require.NoError(t, err)
+		assert.Equal(t, "write limit", d[0].Reason)
 		assert.Equal(t, 25.0, v.set["trv_office"])
 	})
 
 	t.Run("failed write is reported", func(t *testing.T) {
 		v := &recorder{err: errors.New("broker down")}
 		c := rig(v)
-
 		c.Add(history.Sample{Device: "tah_office", Metric: history.Temperature, At: start, Value: 17.5})
 
 		d, err := c.Tick(t.Context(), start)
@@ -190,10 +183,10 @@ func TestObserve(t *testing.T) {
 func TestStaleSensorOpensFully(t *testing.T) {
 	v := &recorder{}
 	c := rig(v)
-	opened(c, 25, at(-60))
+	c.SetOpening("trv_office", 25)
 	c.Add(history.Sample{Device: "tah_office", Metric: history.Temperature, At: start, Value: 17.5})
 
-	d, err := c.Tick(t.Context(), at(31))
+	d, err := c.Tick(t.Context(), start.Add(31*time.Minute))
 	require.NoError(t, err)
 
 	assert.True(t, d[0].Stale)
@@ -205,9 +198,10 @@ func TestStaleSensorOpensFully(t *testing.T) {
 func TestStaleSensorIgnoresWriteLimit(t *testing.T) {
 	v := &recorder{}
 	c := rig(v)
-	opened(c, 25, start)
+	c.SetOpening("trv_office", 25)
+	c.rooms[0].lastWrite = start
 
-	d, err := c.Tick(t.Context(), at(1))
+	d, err := c.Tick(t.Context(), start.Add(time.Minute))
 	require.NoError(t, err)
 
 	assert.True(t, d[0].Stale)
@@ -226,6 +220,20 @@ func TestNoTargetNoWrites(t *testing.T) {
 	assert.Empty(t, v.set)
 }
 
+func TestReady(t *testing.T) {
+	c := New(DefaultConfig(), []Room{office}, &recorder{})
+	assert.False(t, c.Ready())
+
+	c.Add(history.Sample{Device: "hive_receiver", Metric: history.Target, At: start, Value: 16.5})
+	assert.False(t, c.Ready())
+
+	c.Add(history.Sample{Device: "tah_bedroom", Metric: history.Temperature, At: start, Value: 16})
+	assert.False(t, c.Ready())
+
+	c.Add(history.Sample{Device: "tah_office", Metric: history.Temperature, At: start, Value: 16})
+	assert.True(t, c.Ready())
+}
+
 func TestRestore(t *testing.T) {
 	v := &recorder{}
 	c := rig(v, office, Room{Name: "landing", Sensor: "tah_landing", Valve: "trv_landing"})
@@ -238,22 +246,9 @@ func TestRate(t *testing.T) {
 	rs := &roomState{}
 
 	for m := range 12 {
-		rs.points = append(rs.points, point{at: at(m * 5), value: 15 + float64(m)*0.1})
+		rs.add(start.Add(time.Duration(m)*5*time.Minute), 15+float64(m)*0.1, time.Hour)
 	}
 
 	assert.InDelta(t, 0.02, rs.rate(6), 1e-9)
 	assert.Zero(t, rs.rate(13))
-}
-
-func TestPointsForwardFill(t *testing.T) {
-	c := New(DefaultConfig(), []Room{office}, &recorder{})
-	readings := []reading{{value: 15, at: at(2)}, {value: 16, at: at(32)}}
-
-	got := c.points(readings, at(60))
-
-	require.Len(t, got, 12)
-	assert.Equal(t, point{at: at(5), value: 15}, got[0])
-	assert.Equal(t, 15.0, got[5].value)
-	assert.Equal(t, 16.0, got[6].value)
-	assert.Equal(t, point{at: at(60), value: 16}, got[11])
 }
