@@ -50,7 +50,7 @@ func NewControl(options *z2m.Options) *cobra.Command {
 	flags.DurationVar(
 		&c.tick,
 		"tick",
-		5*time.Minute,
+		150*time.Second,
 		"how often to work out the valves",
 	)
 
