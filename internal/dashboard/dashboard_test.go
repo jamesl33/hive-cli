@@ -603,11 +603,13 @@ func TestReportsValve(t *testing.T) {
 
 	assert.Equal(t, map[history.Metric]float64{
 		history.Temperature: 21.5, history.Setpoint: 16, history.Valve: 10, history.Battery: 90,
-		history.ValveHeating: 80, history.ValveIdle: 10,
+		history.ValveHeating: 80, history.ValveIdle: 10, history.ValveState: history.ValveStateIdle,
 	}, got(full))
 
 	// The opening follows the running state, using the positions from earlier reports
-	assert.Equal(t, map[history.Metric]float64{history.Valve: 80}, got(`{"running_state":"heat"}`))
+	assert.Equal(t, map[history.Metric]float64{
+		history.Valve: 80, history.ValveState: history.ValveStateHeat,
+	}, got(`{"running_state":"heat"}`))
 	assert.Empty(t, got(`{"linkquality":40}`))
 }
 

@@ -264,12 +264,21 @@ func valveSamples(u z2m.Update, state map[string]any) []history.Sample {
 		"idle_valve_position":    history.ValveIdle,
 	})...)
 
+	run, running := u.Payload["running_state"]
+	if running {
+		v := history.ValveStateIdle
+		if run == "heat" {
+			v = history.ValveStateHeat
+		}
+
+		samples = append(samples, history.Sample{Device: u.Device, Metric: history.ValveState, At: u.At, Value: v})
+	}
+
 	open, ok := valveOpening(state)
 	if !ok {
 		return samples
 	}
 
-	_, running := u.Payload["running_state"]
 	_, heating := u.Payload["heating_valve_position"]
 	_, idle := u.Payload["idle_valve_position"]
 

@@ -35,6 +35,9 @@ const (
 	// ValveIdle is the percent a radiator valve is set to open to while idle, as it reports it.
 	ValveIdle Metric = "valve_idle"
 
+	// ValveState is what a radiator valve reports it is doing, one of the Valve* values.
+	ValveState Metric = "valve_state"
+
 	// Gas is the kWh of gas used in the half hour starting at the sample, from the smart meter. It is
 	// drawn on the usage chart. As with every metric a repeated value is dropped, so a half hour
 	// without a sample has the value of the one before.
@@ -55,6 +58,15 @@ const (
 
 	// BoilerOn is a boiler which is firing.
 	BoilerOn
+)
+
+// Values of the ValveState metric.
+const (
+	// ValveStateIdle is a valve which is not heating.
+	ValveStateIdle float64 = iota
+
+	// ValveStateHeat is a valve which is heating.
+	ValveStateHeat
 )
 
 // Sample is a measurement from a device.
