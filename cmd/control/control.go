@@ -25,7 +25,6 @@ type Control struct {
 	restore bool
 	rooms   []string
 	observe []string
-	offsets []string
 }
 
 // NewControl creates a new command for closing the radiator valves of rooms which are warm.
@@ -41,16 +40,75 @@ func NewControl(options *z2m.Options) *cobra.Command {
 
 	flags := cmd.Flags()
 
-	flags.BoolVar(&c.restore, "restore", false, "open every valve fully and exit")
-	flags.DurationVar(&c.tick, "tick", 5*time.Minute, "how often to work out the valves")
-	flags.Float64Var(&c.cfg.Kp, "kp", c.cfg.Kp, "percent the valve closes by for each °C the room warms")
-	flags.Float64Var(&c.cfg.Lo, "lo", c.cfg.Lo, "°C below the target where the valve starts to close")
-	flags.Float64Var(&c.cfg.Min, "min", c.cfg.Min, "smallest valve opening in percent")
-	flags.DurationVar(&c.cfg.Lead, "lead", c.cfg.Lead, "how far ahead to look using the rate the room is warming at")
-	flags.DurationVar(&c.cfg.Window, "window", c.cfg.Window, "history which the rate is worked out from")
-	flags.DurationVar(&c.cfg.Stale, "stale", c.cfg.Stale, "silence after which a sensor's valve is opened fully")
-	flags.DurationVar(&c.cfg.WriteEvery, "write-every", c.cfg.WriteEvery, "shortest time between writes to one valve")
-	flags.Float64Var(&c.cfg.WriteMin, "write-min", c.cfg.WriteMin, "smallest change in percent worth a write")
+	flags.BoolVar(
+		&c.restore,
+		"restore",
+		false,
+		"open every valve fully and exit",
+	)
+
+	flags.DurationVar(
+		&c.tick,
+		"tick",
+		5*time.Minute,
+		"how often to work out the valves",
+	)
+
+	flags.Float64Var(
+		&c.cfg.Kp,
+		"kp",
+		c.cfg.Kp,
+		"percent the valve closes by for each °C the room warms",
+	)
+
+	flags.Float64Var(
+		&c.cfg.Lo,
+		"lo",
+		c.cfg.Lo,
+		"°C below the target where the valve starts to close",
+	)
+
+	flags.Float64Var(
+		&c.cfg.Min,
+		"min",
+		c.cfg.Min,
+		"smallest valve opening in percent",
+	)
+
+	flags.DurationVar(
+		&c.cfg.Lead,
+		"lead",
+		c.cfg.Lead,
+		"how far ahead to look using the rate the room is warming at",
+	)
+
+	flags.DurationVar(
+		&c.cfg.Window,
+		"window",
+		c.cfg.Window,
+		"history which the rate is worked out from",
+	)
+
+	flags.DurationVar(
+		&c.cfg.Stale,
+		"stale",
+		c.cfg.Stale,
+		"silence after which a sensor's valve is opened fully",
+	)
+
+	flags.DurationVar(
+		&c.cfg.WriteEvery,
+		"write-every",
+		c.cfg.WriteEvery,
+		"shortest time between writes to one valve",
+	)
+
+	flags.Float64Var(
+		&c.cfg.WriteMin,
+		"write-min",
+		c.cfg.WriteMin,
+		"smallest change in percent worth a write",
+	)
 
 	flags.StringArrayVar(
 		&c.rooms,
@@ -65,8 +123,6 @@ func NewControl(options *z2m.Options) *cobra.Command {
 		[]string{"lounge=tah_lounge:trv_kitchen", "stairs=tah_stairs:trv_stairs"},
 		"room to log what would be done for but never write, as name=sensor:valve",
 	)
-
-	flags.StringArrayVar(&c.offsets, "offset", nil, "°C to hold a room above the thermostat target, as name=°C")
 
 	return &cmd
 }
@@ -194,24 +250,6 @@ func logDecision(d control.Decision) {
 
 // parseRooms returns the rooms to control and observe.
 func (c *Control) parseRooms() ([]control.Room, error) {
-	offsets := make(map[string]float64, len(c.offsets))
-
-	for _, o := range c.offsets {
-		name, value, ok := strings.Cut(o, "=")
-		if !ok {
-			return nil, fmt.Errorf("offset %q is not name=°C", o)
-		}
-
-		var v float64
-
-		_, err := fmt.Sscanf(value, "%g", &v)
-		if err != nil {
-			return nil, fmt.Errorf("offset %q is not name=°C: %w", o, err)
-		}
-
-		offsets[name] = v
-	}
-
 	var rooms []control.Room
 
 	for _, group := range []struct {
@@ -225,7 +263,6 @@ func (c *Control) parseRooms() ([]control.Room, error) {
 			}
 
 			r.Observe = group.observe
-			r.Offset = offsets[r.Name]
 
 			rooms = append(rooms, r)
 		}
