@@ -197,7 +197,7 @@ func readings(u z2m.Update, metrics ...history.Metric) []history.Sample {
 	return samples
 }
 
-// valveSamples returns the radiator temperature, setpoint and valve opening of a radiator valve if the
+// valveSamples returns the temperature, setpoint and valve opening of a radiator valve if the
 // report changes them. Anything which does not report valve positions is not a radiator valve.
 func valveSamples(u z2m.Update, state map[string]any) []history.Sample {
 	_, ok := state["heating_valve_position"]
@@ -208,7 +208,7 @@ func valveSamples(u z2m.Update, state map[string]any) []history.Sample {
 	var samples []history.Sample
 
 	for attr, metric := range map[string]history.Metric{
-		"local_temperature":         history.Radiator,
+		"local_temperature":         history.Temperature,
 		"occupied_heating_setpoint": history.Setpoint,
 	} {
 		v, ok := u.Payload[attr].(float64)

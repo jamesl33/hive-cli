@@ -46,7 +46,7 @@ type record struct {
 // write on every report.
 func stepsPerUnit(m Metric) float64 {
 	switch m {
-	case Temperature, Target, Radiator, Setpoint:
+	case Temperature, Target, Setpoint:
 		return 10
 	case Gas, Electricity:
 		return 1000

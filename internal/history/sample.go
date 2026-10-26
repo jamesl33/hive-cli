@@ -22,9 +22,6 @@ const (
 	// Target is the °C the Hive receiver is set to hold the room at.
 	Target Metric = "target"
 
-	// Radiator is the °C a radiator valve measured at the radiator, which reads warmer than the room.
-	Radiator Metric = "radiator"
-
 	// Setpoint is the °C a radiator valve is set to hold.
 	Setpoint Metric = "setpoint"
 

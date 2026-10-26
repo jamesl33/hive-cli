@@ -508,7 +508,7 @@ func TestOutdoorsStartHidden(t *testing.T) {
 	assert.Empty(t, New(t.Context(), feed{}, NewStore(receiver)).hidden)
 }
 
-func TestReportsRadiatorValve(t *testing.T) {
+func TestReportsValve(t *testing.T) {
 	r := NewReports(receiver)
 
 	got := func(js string) map[history.Metric]float64 {
@@ -523,7 +523,7 @@ func TestReportsRadiatorValve(t *testing.T) {
 	full := `{"local_temperature":21.5,"occupied_heating_setpoint":16,"heating_valve_position":80,"idle_valve_position":10,"running_state":"idle","battery":90}`
 
 	assert.Equal(t, map[history.Metric]float64{
-		history.Radiator: 21.5, history.Setpoint: 16, history.Valve: 10, history.Battery: 90,
+		history.Temperature: 21.5, history.Setpoint: 16, history.Valve: 10, history.Battery: 90,
 	}, got(full))
 
 	// The opening follows the running state, using the positions from earlier reports
