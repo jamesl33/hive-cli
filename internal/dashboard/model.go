@@ -74,7 +74,8 @@ W      previous time window
 1-0 a-z pick a group with a number, then show or hide a device in it with a letter
 esc    cancel picking a device
 o      show or hide the outdoor sensor on the charts
-g, e   show or hide gas or electricity on the usage chart
+t      show or hide the radiator valve temperatures on the climate charts
+g, e  show or hide gas or electricity on the usage chart
 space pause or resume the display
 ?      toggle this help
 q      quit`
@@ -107,6 +108,7 @@ type viewKey struct {
 	help          bool
 	paused        bool
 	hidden        string
+	valveTemps    bool
 	picking       bool
 	pick          group
 	connected     bool
@@ -137,6 +139,10 @@ type Model struct {
 	// hidden is the devices left off the charts, so they scale to the others. It is replaced, not
 	// changed, by toggle, as models share it.
 	hidden map[string]bool
+
+	// valveTemps shows the temperatures of the radiator valves on the climate charts, which leave them
+	// off until it is set.
+	valveTemps bool
 
 	// picking is set after the key of a group, until the key of a device in the group, which is pick.
 	picking bool
@@ -218,6 +224,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.help = !m.help
 		case "o":
 			m = m.toggle(m.store.Outdoors)
+		case "t":
+			m.valveTemps = !m.valveTemps
 		case "g":
 			m = m.toggle(string(history.Gas))
 		case "e":
@@ -336,18 +344,19 @@ func (m Model) viewKey(now time.Time) viewKey {
 	}
 
 	return viewKey{
-		version:   version,
-		window:    m.window,
-		page:      m.page,
-		width:     m.width,
-		height:    m.height,
-		help:      m.help,
-		paused:    m.paused,
-		hidden:    m.hiddenKey(),
-		picking:   m.picking,
-		pick:      m.pick,
-		connected: m.connected,
-		bucket:    now.UnixNano() / int64(m.cell()),
+		version:    version,
+		window:     m.window,
+		page:       m.page,
+		width:      m.width,
+		height:     m.height,
+		help:       m.help,
+		paused:     m.paused,
+		hidden:     m.hiddenKey(),
+		valveTemps: m.valveTemps,
+		picking:    m.picking,
+		pick:       m.pick,
+		connected:  m.connected,
+		bucket:     now.UnixNano() / int64(m.cell()),
 	}
 }
 
@@ -430,7 +439,8 @@ func (m Model) drawClimate(now, from time.Time) []string {
 		picking = m.pick
 	}
 
-	legend := m.store.legend(now, m.hidden, picking)
+	hidden := m.climateHidden()
+	legend := m.store.legend(now, hidden, picking)
 	legendRows := strings.Count(legend, "\n") + 1
 	rows := []string{box(m.title("Devices"), formatWindow(windows[m.window]), legend, m.width)}
 
@@ -457,11 +467,11 @@ func (m Model) drawClimate(now, from time.Time) []string {
 		tempH = h - humH
 	}
 
-	temp := m.store.renderChart(history.Temperature, m.hidden, m.width-2, tempH, from, now)
+	temp := m.store.renderChart(history.Temperature, hidden, m.width-2, tempH, from, now)
 	rows = append(rows, box("Temperature °C", "", temp.view, m.width))
 
 	if hasHumidity {
-		humidity := m.store.renderChart(history.Humidity, m.hidden, m.width-2, humH, from, now)
+		humidity := m.store.renderChart(history.Humidity, hidden, m.width-2, humH, from, now)
 		rows = append(rows, box("Humidity %", "", humidity.view, m.width))
 	}
 
@@ -473,6 +483,25 @@ func (m Model) drawClimate(now, from time.Time) []string {
 	}
 
 	return rows
+}
+
+// climateHidden returns the devices left off the climate page: the hidden ones, and the radiator valves
+// unless their temperatures are shown.
+func (m Model) climateHidden() map[string]bool {
+	if m.valveTemps {
+		return m.hidden
+	}
+
+	hidden := maps.Clone(m.hidden)
+	if hidden == nil {
+		hidden = map[string]bool{}
+	}
+
+	for _, device := range m.store.groupDevices(groupValves) {
+		hidden[device] = true
+	}
+
+	return hidden
 }
 
 // climateHeight returns the height left for the charts of the climate page, given the rows of the legend,

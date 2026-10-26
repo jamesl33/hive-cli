@@ -529,6 +529,20 @@ func TestHideOutdoors(t *testing.T) {
 	assert.Len(t, store.Series[history.Temperature], 2)
 }
 
+func TestClimateHidesValveTemperatures(t *testing.T) {
+	store := NewStore(receiver)
+	now := time.Now()
+
+	store.Apply(update(t, "hall", now, `{"temperature":18.2}`))
+	store.Apply(update(t, "trv_bedroom", now, `{"local_temperature":21.5,"occupied_heating_setpoint":30,"heating_valve_position":100,"idle_valve_position":100,"running_state":"idle"}`))
+
+	m := New(t.Context(), feed{}, store)
+	assert.Equal(t, map[string]bool{"trv_bedroom": true}, m.climateHidden())
+
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
+	assert.Empty(t, next.(Model).climateHidden())
+}
+
 func TestBoxCorner(t *testing.T) {
 	top, _, _ := strings.Cut(box("Devices", "24h", "x", 30), "\n")
 	assert.Equal(t, "┌─ Devices ──────────── 24h ─┐", top)
