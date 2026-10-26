@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"sort"
 	"time"
 
 	"github.com/jamesl33/hive-cli/internal/history"
@@ -30,6 +31,10 @@ type Config struct {
 
 	// Window is how much history the rate is worked out from.
 	Window time.Duration
+
+	// Step is how far apart the readings the rate is worked out from are, taking the latest reading at
+	// each step.
+	Step time.Duration
 
 	// MinPoints is the fewest readings in the window to trust the rate; with fewer there is no lead.
 	MinPoints int
@@ -55,6 +60,7 @@ func DefaultConfig() Config {
 		Min:        10,
 		Lead:       20 * time.Minute,
 		Window:     60 * time.Minute,
+		Step:       5 * time.Minute,
 		MinPoints:  6,
 		Stale:      30 * time.Minute,
 		WriteEvery: 30 * time.Minute,
@@ -125,34 +131,31 @@ type Decision struct {
 	Reason string
 }
 
-// Controller works out the opening of the valve of each room.
+// Controller works out the opening of the valve of each room from the recorded history.
 type Controller struct {
 	cfg    Config
 	valves Valves
 	rooms  []*roomState
 
-	// temps is the latest reading of each sensor.
-	temps map[string]reading
+	// temps is every reading of each sensor, oldest first.
+	temps map[string][]reading
 
-	// openings is the opening each valve last reported.
-	openings map[string]float64
+	// openings is the latest opening of each valve and when it changed.
+	openings map[string]reading
 
 	// target is the target of the thermostat, nil until it has been seen.
 	target *float64
 }
 
-// roomState is what the controller remembers about a room.
+// roomState is what the controller works out about a room on a tick.
 type roomState struct {
 	Room
 
-	// points are the readings of the room on recent ticks, one per tick.
+	// points are the readings of the room across the window, one per step.
 	points []point
-
-	// lastWrite is when the valve was last written to.
-	lastWrite time.Time
 }
 
-// reading is a temperature report.
+// reading is a value reported at a time.
 type reading struct {
 	value float64
 	at    time.Time
@@ -169,8 +172,8 @@ func New(cfg Config, rooms []Room, valves Valves) *Controller {
 	c := &Controller{
 		cfg:      cfg,
 		valves:   valves,
-		temps:    make(map[string]reading),
-		openings: make(map[string]float64),
+		temps:    make(map[string][]reading),
+		openings: make(map[string]reading),
 	}
 
 	for _, r := range rooms {
@@ -180,37 +183,17 @@ func New(cfg Config, rooms []Room, valves Valves) *Controller {
 	return c
 }
 
-// Add takes in a measurement: the temperature of a sensor, or the target of the thermostat. Anything
-// else is ignored.
+// Add takes in a recorded measurement, which must be newer than the ones before it: the temperature of
+// a sensor, the opening of a valve or the target of the thermostat. Anything else is ignored.
 func (c *Controller) Add(s history.Sample) {
 	switch s.Metric {
 	case history.Temperature:
-		c.temps[s.Device] = reading{value: s.Value, at: s.At}
+		c.temps[s.Device] = append(c.temps[s.Device], reading{value: s.Value, at: s.At})
+	case history.Valve:
+		c.openings[s.Device] = reading{value: s.Value, at: s.At}
 	case history.Target:
 		c.target = &s.Value
 	}
-}
-
-// SetOpening takes in the opening a valve reported in percent.
-func (c *Controller) SetOpening(valve string, percent float64) {
-	c.openings[valve] = percent
-}
-
-// Ready returns whether the controller has the target of the thermostat and a reading from the sensor
-// of every room.
-func (c *Controller) Ready() bool {
-	if c.target == nil {
-		return false
-	}
-
-	for _, rs := range c.rooms {
-		_, ok := c.temps[rs.Sensor]
-		if !ok {
-			return false
-		}
-	}
-
-	return true
 }
 
 // Tick works out every room and writes the valves which need it.
@@ -230,11 +213,6 @@ func (c *Controller) Tick(ctx context.Context, now time.Time) ([]Decision, error
 				d.Reason = "write failed"
 
 				errs = append(errs, fmt.Errorf("failed to set %s: %w", rs.Valve, err))
-			}
-
-			if err == nil {
-				rs.lastWrite = now
-				c.openings[rs.Valve] = d.Opening
 			}
 		}
 
@@ -264,7 +242,7 @@ func (c *Controller) decide(rs *roomState, now time.Time) Decision {
 
 	current, ok := c.openings[rs.Valve]
 	if ok {
-		d.Current = current
+		d.Current = current.value
 	}
 
 	if c.target == nil {
@@ -276,10 +254,8 @@ func (c *Controller) decide(rs *roomState, now time.Time) Decision {
 
 	d.Target = *c.target + rs.Offset
 
-	t, ok := c.temps[rs.Sensor]
-	if !ok || now.Sub(t.at) > c.cfg.Stale {
-		rs.points = nil
-
+	readings := c.temps[rs.Sensor]
+	if len(readings) == 0 || now.Sub(readings[len(readings)-1].at) > c.cfg.Stale {
 		d.Stale = true
 		d.Opening = 100
 		d.Reason = c.blocked(rs, now, d, true)
@@ -288,11 +264,11 @@ func (c *Controller) decide(rs *roomState, now time.Time) Decision {
 		return d
 	}
 
-	rs.add(now, t.value, c.cfg.Window)
+	rs.points = c.points(readings, now)
 
-	d.Temperature = t.value
+	d.Temperature = readings[len(readings)-1].value
 	d.Rate = rs.rate(c.cfg.MinPoints) * 60
-	d.Predicted = t.value + d.Rate*c.cfg.Lead.Hours()
+	d.Predicted = d.Temperature + d.Rate*c.cfg.Lead.Hours()
 	d.Opening = c.opening(d.Target - d.Predicted)
 	d.Reason = c.blocked(rs, now, d, false)
 	d.Written = d.Reason == ""
@@ -323,20 +299,44 @@ func (c *Controller) blocked(rs *roomState, now time.Time, d Decision, urgent bo
 		return "within write step"
 	case urgent:
 		return ""
-	case !rs.lastWrite.IsZero() && now.Sub(rs.lastWrite) < c.cfg.WriteEvery:
+	case c.openedWithin(rs.Valve, now, c.cfg.WriteEvery):
 		return "write limit"
 	}
 
 	return ""
 }
 
-// add records a reading and forgets anything older than the window.
-func (rs *roomState) add(now time.Time, value float64, window time.Duration) {
-	rs.points = append(rs.points, point{at: now, value: value})
+// openedWithin returns whether the opening of the valve changed within the last d. Valves only
+// report a changed opening, so this is when the valve was last written to.
+func (c *Controller) openedWithin(valve string, now time.Time, d time.Duration) bool {
+	o, ok := c.openings[valve]
 
-	for len(rs.points) > 0 && now.Sub(rs.points[0].at) > window {
-		rs.points = rs.points[1:]
+	return ok && now.Sub(o.at) < d
+}
+
+// points returns the readings across the window up to now, taking the latest reading at each step.
+// A step before the first reading has no point.
+func (c *Controller) points(readings []reading, now time.Time) []point {
+	var points []point
+
+	for t := now.Add(-c.cfg.Window); !t.After(now); t = t.Add(c.cfg.Step) {
+		v, ok := valueAt(readings, t)
+		if ok {
+			points = append(points, point{at: t, value: v})
+		}
 	}
+
+	return points
+}
+
+// valueAt returns the latest reading at or before the time.
+func valueAt(readings []reading, t time.Time) (float64, bool) {
+	i := sort.Search(len(readings), func(i int) bool { return readings[i].at.After(t) })
+	if i == 0 {
+		return 0, false
+	}
+
+	return readings[i-1].value, true
 }
 
 // rate returns the slope of the readings in °C per minute, or 0 if there are fewer than points.

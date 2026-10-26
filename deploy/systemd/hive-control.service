@@ -1,16 +1,18 @@
 [Unit]
-Description=Close the radiator valve of each warm room
+Description=Set the radiator valve of each room from its temperature
 Documentation=https://github.com/jamesl33/hive-cli/tree/master/deploy/systemd
 Wants=network-online.target time-sync.target
 After=network-online.target time-sync.target mosquitto.service zigbee2mqtt.service
 
 [Service]
+Type=oneshot
 EnvironmentFile=-/etc/hive/env
-# TRVs hold their last opening if the service dies, so open them all again whenever it stops.
+Environment=HIVE_HISTORY=/var/lib/hive
+# hive record holds readings in memory for up to 10 minutes; SIGUSR1 makes it write them out first
+ExecStartPre=+/usr/bin/systemctl kill --kill-whom=main --signal=SIGUSR1 hive-record.service
+ExecStartPre=/bin/sleep 15
 ExecStart=/usr/local/bin/hive control
-ExecStopPost=/usr/local/bin/hive control --restore
-Restart=always
-RestartSec=30s
+TimeoutStartSec=2min
 User=hive
 ProtectSystem=strict
 ProtectHome=yes
@@ -26,6 +28,3 @@ LockPersonality=yes
 CapabilityBoundingSet=
 Nice=10
 MemoryMax=64M
-
-[Install]
-WantedBy=multi-user.target
