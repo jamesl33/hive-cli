@@ -34,7 +34,7 @@ type Config struct {
 	// Stale is how long a sensor can go without reporting before its valve is opened fully.
 	Stale time.Duration
 
-	// WriteEvery is the shortest time between writes to a valve, as they run on batteries.
+	// WriteEvery is the shortest time between writes which open a valve, as they run on batteries.
 	WriteEvery time.Duration
 
 	// WriteMin is the smallest change in opening in percent which is worth a write.
@@ -63,7 +63,7 @@ const (
 	// defaultStale is the 30 minutes of silence after which the valve of a sensor is opened fully.
 	defaultStale = 30 * time.Minute
 
-	// defaultWriteEvery is the shortest time between writes to one valve, as they run on batteries.
+	// defaultWriteEvery is the shortest time between writes which open one valve, as they run on batteries.
 	defaultWriteEvery = 5 * time.Minute
 
 	// defaultWriteMin is the smallest change in opening in percent which is worth a write.
