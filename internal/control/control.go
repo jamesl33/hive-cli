@@ -328,6 +328,7 @@ func (c *Controller) decide(rs *roomState, now time.Time) Decision {
 	d.Rate = rs.rate(c.cfg.MinPoints) * 60
 	d.Predicted = t.value + d.Rate*c.cfg.Lead.Hours()
 	d.Opening = c.opening(d.Target - d.Predicted)
+
 	d.Reason = c.blocked(rs, now, d, false)
 	d.Written = d.Reason == ""
 
@@ -343,8 +344,10 @@ func (c *Controller) opening(err float64) float64 {
 }
 
 // blocked says why the valve should not be written to, or returns empty if it should. An urgent
-// write is one which makes the house safe, which is not held back by the limits on writes.
+// write is one which makes the house safe, which is not held back by the limits on writes. A close is
+// only held back by the write step, except to the minimum, as every minute of delay is overshoot.
 func (c *Controller) blocked(rs *roomState, now time.Time, d Decision, urgent bool) string {
+	closing := d.Opening < d.Current
 	step := c.cfg.WriteMin
 	if urgent {
 		step = 1
@@ -353,9 +356,11 @@ func (c *Controller) blocked(rs *roomState, now time.Time, d Decision, urgent bo
 	switch {
 	case rs.Observe:
 		return "observe"
+	case closing && d.Opening == c.cfg.Min:
+		return ""
 	case math.Abs(d.Opening-d.Current) < step:
 		return "within write step"
-	case urgent:
+	case urgent, closing:
 		return ""
 	case !rs.lastWrite.IsZero() && now.Sub(rs.lastWrite) < c.cfg.WriteEvery:
 		return "write limit"

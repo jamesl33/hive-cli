@@ -47,7 +47,7 @@ Check on it with `journalctl -u hive-record` and `ls -l /var/lib/hive`.
 
 ## Radiator valves
 
-`hive-control.service` runs `hive control`. Each tick (2.5 minutes) it works out the opening of each room's TRV from the room sensor and the thermostat target: fully open until the room is 1.8°C below target, closing as it warms to reach 10% at the target. It looks ahead using the rate the room is warming at, so the valve closes before the room reaches the target. A sensor silent for 30 minutes opens its valve fully. A valve is only written if its opening moved by 15% and it was not written in the last 5 minutes.
+`hive-control.service` runs `hive control`. Each tick (2.5 minutes) it works out the opening of each room's TRV from the room sensor and the thermostat target: fully open until the room is 1.8°C below target, closing as it warms to reach 10% at the target. It looks ahead using the rate the room is warming at, so the valve closes before the room reaches the target. A sensor silent for 30 minutes opens its valve fully. A valve is only written if its opening moved by 15% and it was not written in the last 5 minutes, except a close, which ignores the 5 minutes.
 
 - `ExecStopPost=… --restore` opens every valve again when the service stops or crashes, as TRVs keep their last opening if it dies.
 - Rooms are `--room name=sensor:valve`. `--observe` rooms are logged but never written (the lounge and stairs by default).

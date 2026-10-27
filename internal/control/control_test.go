@@ -128,7 +128,7 @@ func TestWriteLimits(t *testing.T) {
 	t.Run("a small change is not worth a write", func(t *testing.T) {
 		v := &recorder{}
 		c := rig(v)
-		c.SetOpening("trv_office", 30)
+		c.SetOpening("trv_office", 40)
 
 		d := run(t, c, 30, steady(16.0))[0]
 
@@ -152,6 +152,35 @@ func TestWriteLimits(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "write limit", d[0].Reason)
 		assert.Equal(t, 10.0, v.set["trv_office"])
+	})
+
+	t.Run("a close to the minimum ignores the write step", func(t *testing.T) {
+		v := &recorder{}
+		c := rig(v)
+		c.SetOpening("trv_office", 20)
+
+		run(t, c, 30, steady(16.5))
+
+		assert.Equal(t, 10.0, v.set["trv_office"])
+	})
+
+	t.Run("a close skips the time limit", func(t *testing.T) {
+		v := &recorder{}
+		c := rig(v)
+		c.Add(history.Sample{Device: "tah_office", Metric: history.Temperature, At: start, Value: 15.0})
+
+		d, err := c.Tick(t.Context(), start)
+		require.NoError(t, err)
+		assert.Equal(t, 85.0, d[0].Opening)
+		assert.True(t, d[0].Written)
+
+		now := start.Add(time.Minute)
+		c.Add(history.Sample{Device: "tah_office", Metric: history.Temperature, At: now, Value: 16.0})
+
+		d, err = c.Tick(t.Context(), now)
+		require.NoError(t, err)
+		assert.Equal(t, 35.0, d[0].Opening)
+		assert.True(t, d[0].Written)
 	})
 
 	t.Run("failed write is reported", func(t *testing.T) {
