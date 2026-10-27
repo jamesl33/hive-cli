@@ -74,11 +74,10 @@ func TestOpening(t *testing.T) {
 		temp float64
 		want float64
 	}{
-		{"cold room stays fully open", 15.0, 100},
-		{"open until it is lo below target", 16.0, 100},
-		{"closing at target", 16.5, 75},
-		{"half a degree over", 17.0, 50},
-		{"a degree over", 17.5, 25},
+		{"cold room stays fully open", 14.0, 100},
+		{"open until the whole range below target", 14.7, 100},
+		{"closing on the way up", 16.0, 35},
+		{"at the minimum at target", 16.5, 10},
 		{"far over stays at the minimum", 20.0, 10},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -91,16 +90,16 @@ func TestOpening(t *testing.T) {
 
 func TestOffset(t *testing.T) {
 	r := office
-	r.Offset = -1
+	r.Offset = 1
 
 	d := run(t, rig(&recorder{}, r), 60, steady(16.5))
 
-	assert.InDelta(t, 15.5, d[0].Target, 1e-9)
-	assert.Equal(t, 25.0, d[0].Opening)
+	assert.InDelta(t, 17.5, d[0].Target, 1e-9)
+	assert.Equal(t, 60.0, d[0].Opening)
 }
 
 func TestLeadClosesBeforeTarget(t *testing.T) {
-	rising := func(m int) float64 { return 15.5 + float64(m)*0.02 }
+	rising := func(m int) float64 { return 14.8 + float64(m)*0.02 }
 
 	d := run(t, rig(&recorder{}), 60, rising)[0]
 
@@ -122,16 +121,16 @@ func TestWrites(t *testing.T) {
 
 	run(t, c, 30, steady(17.5))
 
-	assert.Equal(t, 25.0, v.set["trv_office"])
+	assert.Equal(t, 10.0, v.set["trv_office"])
 }
 
 func TestWriteLimits(t *testing.T) {
 	t.Run("a small change is not worth a write", func(t *testing.T) {
 		v := &recorder{}
 		c := rig(v)
-		c.SetOpening("trv_office", 75)
+		c.SetOpening("trv_office", 30)
 
-		d := run(t, c, 30, steady(16.5))[0]
+		d := run(t, c, 30, steady(16.0))[0]
 
 		assert.Equal(t, "within write step", d.Reason)
 		assert.Empty(t, v.set)
@@ -148,12 +147,11 @@ func TestWriteLimits(t *testing.T) {
 		assert.True(t, d[0].Written)
 
 		c.Add(history.Sample{Device: "tah_office", Metric: history.Temperature, At: start.Add(4 * time.Minute), Value: 15})
-		c.SetOpening("trv_office", 25)
 
 		d, err = c.Tick(t.Context(), start.Add(4*time.Minute))
 		require.NoError(t, err)
 		assert.Equal(t, "write limit", d[0].Reason)
-		assert.Equal(t, 25.0, v.set["trv_office"])
+		assert.Equal(t, 10.0, v.set["trv_office"])
 	})
 
 	t.Run("failed write is reported", func(t *testing.T) {

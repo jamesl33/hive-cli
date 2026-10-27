@@ -64,13 +64,6 @@ func NewControl(options *z2m.Options) *cobra.Command {
 	)
 
 	flags.Float64Var(
-		&c.cfg.Lo,
-		"lo",
-		c.cfg.Lo,
-		"°C below the target where the valve starts to close",
-	)
-
-	flags.Float64Var(
 		&c.cfg.Min,
 		"min",
 		c.cfg.Min,

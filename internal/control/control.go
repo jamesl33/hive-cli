@@ -12,14 +12,11 @@ import (
 	"github.com/jamesl33/hive-cli/internal/history"
 )
 
-// Config is how the controller behaves. The opening of a valve is 100% while the room is Lo below
-// its target or more, and falls by Kp percent for every degree the room warms past that, down to Min.
+// Config is how the controller behaves. The opening of a valve is Min when the room is at its target
+// and rises by Kp percent for every degree the room is below it, up to 100.
 type Config struct {
 	// Kp is the percent the valve closes by for each °C the room warms.
 	Kp float64
-
-	// Lo is how many °C below the target the room is when the valve starts to close.
-	Lo float64
 
 	// Min is the smallest opening in percent, so the boiler never runs against closed valves.
 	Min float64
@@ -51,17 +48,14 @@ const (
 	// defaultKp is 50% of closing for each °C the room warms.
 	defaultKp = 50
 
-	// defaultLo is 0.5°C below the target, where the valve starts to close.
-	defaultLo = 0.5
-
 	// defaultMin is the smallest opening in percent, so the boiler never runs against closed valves.
 	defaultMin = 10
 
 	// defaultLead is 20 minutes of looking ahead at the rate the room is warming at.
 	defaultLead = 20 * time.Minute
 
-	// defaultWindow is the hour of readings which the rate is worked out from.
-	defaultWindow = time.Hour
+	// defaultWindow is the 30 minutes of readings which the rate is worked out from.
+	defaultWindow = 30 * time.Minute
 
 	// defaultMinPoints is the fewest readings in the window to trust the rate.
 	defaultMinPoints = 6
@@ -83,7 +77,6 @@ const (
 func DefaultConfig() Config {
 	c := Config{
 		Kp:         defaultKp,
-		Lo:         defaultLo,
 		Min:        defaultMin,
 		Lead:       defaultLead,
 		Window:     defaultWindow,
@@ -343,7 +336,7 @@ func (c *Controller) decide(rs *roomState, now time.Time) Decision {
 
 // opening returns the opening for a room which is err °C below its target, rounded.
 func (c *Controller) opening(err float64) float64 {
-	u := 100 + c.cfg.Kp*(err-c.cfg.Lo)
+	u := c.cfg.Min + c.cfg.Kp*err
 	u = math.Min(100, math.Max(c.cfg.Min, u))
 
 	return math.Round(u/c.cfg.Round) * c.cfg.Round
