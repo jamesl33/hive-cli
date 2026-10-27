@@ -2,7 +2,6 @@ package control
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -15,9 +14,6 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
 )
-
-// restoreTimeout is how long to wait to open the valves when stopping.
-const restoreTimeout = 15 * time.Second
 
 // Control defines the struct for the control command.
 type Control struct {
@@ -124,7 +120,8 @@ func NewControl(options *z2m.Options) *cobra.Command {
 	return &cmd
 }
 
-// Run controls the valves until the context is cancelled.
+// Run controls the valves until the context is cancelled. It leaves them as they are, as a restart
+// would only open them to put them back; the service opens them with --restore when it stops.
 func (c *Control) Run(ctx context.Context) error {
 	rooms, err := c.parseRooms()
 	if err != nil {
@@ -143,12 +140,7 @@ func (c *Control) Run(ctx context.Context) error {
 
 	ctrl := control.New(c.cfg, rooms, feed)
 
-	err = c.loop(ctx, feed, ctrl)
-
-	stop, cancel := context.WithTimeout(context.Background(), restoreTimeout)
-	defer cancel()
-
-	return errors.Join(err, ctrl.Restore(stop))
+	return c.loop(ctx, feed, ctrl)
 }
 
 // loop reads the feed and works out the valves every tick until the context is cancelled or the feed

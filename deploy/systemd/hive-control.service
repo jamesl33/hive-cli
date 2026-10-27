@@ -6,9 +6,9 @@ After=network-online.target time-sync.target mosquitto.service zigbee2mqtt.servi
 
 [Service]
 EnvironmentFile=-/etc/hive/env
-# TRVs hold their last opening if the service dies, so open them all again whenever it stops.
+# TRVs hold their last opening if the service dies, so open them all again whenever it stops, except for a restart, which keeps them.
 ExecStart=/usr/local/bin/hive control
-ExecStopPost=/usr/local/bin/hive control --restore
+ExecStopPost=/bin/sh -c 'systemctl list-jobs --no-legend | grep -q "hive-control.service restart" || exec /usr/local/bin/hive control --restore'
 Restart=always
 RestartSec=30s
 User=hive
