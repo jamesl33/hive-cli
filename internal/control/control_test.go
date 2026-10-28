@@ -279,3 +279,41 @@ func TestRate(t *testing.T) {
 	assert.InDelta(t, 0.02, rs.rate(6), 1e-9)
 	assert.Zero(t, rs.rate(13))
 }
+
+func TestClosesFullyWhileObservedValveOpen(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		observed float64
+		want     float64
+	}{
+		{"observed open", 100, 0},
+		{"observed closed", 0, 10},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			lounge := Room{Name: "lounge", Sensor: "tah_lounge", Valve: "trv_kitchen", Observe: true}
+			c := rig(&recorder{}, office, lounge)
+			c.SetOpening("trv_office", 100)
+			c.SetOpening("trv_kitchen", tc.observed)
+			c.Add(history.Sample{Device: "tah_lounge", Metric: history.Temperature, At: start, Value: 15})
+
+			d := run(t, c, 30, steady(18))[0]
+
+			assert.Equal(t, tc.want, d.Opening)
+		})
+	}
+}
+
+func TestRaisesToMinWhenObservedValveCloses(t *testing.T) {
+	v := &recorder{}
+	lounge := Room{Name: "lounge", Sensor: "tah_lounge", Valve: "trv_kitchen", Observe: true}
+	c := rig(v, office, lounge)
+	c.SetOpening("trv_office", 0)
+	c.SetOpening("trv_kitchen", 0)
+	c.Add(history.Sample{Device: "tah_lounge", Metric: history.Temperature, At: start, Value: 15})
+	c.rooms[0].lastWrite = start
+
+	d := run(t, c, 0, steady(18))[0]
+
+	assert.True(t, d.Written)
+	assert.Equal(t, 10.0, v.set["trv_office"])
+}

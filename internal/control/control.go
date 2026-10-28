@@ -18,7 +18,8 @@ type Config struct {
 	// Kp is the percent the valve closes by for each °C the room warms.
 	Kp float64
 
-	// Min is the smallest opening in percent, so the boiler never runs against closed valves.
+	// Min is the smallest opening in percent, so the boiler never runs against closed valves. A valve
+	// may close fully while a valve which is only observed is open, as that keeps the water flowing.
 	Min float64
 
 	// Lead is how far ahead to look, using the rate the room is warming at, so the valve closes before
@@ -309,6 +310,7 @@ func (c *Controller) decide(rs *roomState, now time.Time) Decision {
 	}
 
 	d.Target = *c.target + rs.Offset
+	floor := c.floor()
 
 	t, ok := c.temps[rs.Sensor]
 	if !ok || now.Sub(t.at) > c.cfg.Stale {
@@ -316,7 +318,7 @@ func (c *Controller) decide(rs *roomState, now time.Time) Decision {
 
 		d.Stale = true
 		d.Opening = 100
-		d.Reason = c.blocked(rs, now, d, true)
+		d.Reason = c.blocked(rs, now, d, floor, true)
 		d.Written = d.Reason == ""
 
 		return d
@@ -327,26 +329,39 @@ func (c *Controller) decide(rs *roomState, now time.Time) Decision {
 	d.Temperature = t.value
 	d.Rate = rs.rate(c.cfg.MinPoints) * 60
 	d.Predicted = t.value + d.Rate*c.cfg.Lead.Hours()
-	d.Opening = c.opening(d.Target - d.Predicted)
+	d.Opening = c.opening(d.Target-d.Predicted, floor)
 
-	d.Reason = c.blocked(rs, now, d, false)
+	d.Reason = c.blocked(rs, now, d, floor, false)
 	d.Written = d.Reason == ""
 
 	return d
 }
 
-// opening returns the opening for a room which is err °C below its target, rounded.
-func (c *Controller) opening(err float64) float64 {
+// floor returns the smallest opening of a valve. It is zero while an observed valve is open, as the
+// controller never writes those, so water keeps flowing however far the others close.
+func (c *Controller) floor() float64 {
+	for _, rs := range c.rooms {
+		if rs.Observe && c.openings[rs.Valve] >= c.cfg.Min {
+			return 0
+		}
+	}
+
+	return c.cfg.Min
+}
+
+// opening returns the opening for a room which is err °C below its target, rounded, and at least floor.
+func (c *Controller) opening(err, floor float64) float64 {
 	u := c.cfg.Min + c.cfg.Kp*err
-	u = math.Min(100, math.Max(c.cfg.Min, u))
+	u = math.Min(100, math.Max(floor, u))
 
 	return math.Round(u/c.cfg.Round) * c.cfg.Round
 }
 
 // blocked says why the valve should not be written to, or returns empty if it should. An urgent
 // write is one which makes the house safe, which is not held back by the limits on writes. A close is
-// only held back by the write step, except to the minimum, as every minute of delay is overshoot.
-func (c *Controller) blocked(rs *roomState, now time.Time, d Decision, urgent bool) string {
+// only held back by the write step, except to the floor, as every minute of delay is overshoot.
+// A valve below the floor is raised to it at once, as the boiler would run against closed valves.
+func (c *Controller) blocked(rs *roomState, now time.Time, d Decision, floor float64, urgent bool) string {
 	closing := d.Opening < d.Current
 	step := c.cfg.WriteMin
 	if urgent {
@@ -356,7 +371,7 @@ func (c *Controller) blocked(rs *roomState, now time.Time, d Decision, urgent bo
 	switch {
 	case rs.Observe:
 		return "observe"
-	case closing && d.Opening == c.cfg.Min:
+	case closing && d.Opening == floor, d.Current < floor:
 		return ""
 	case math.Abs(d.Opening-d.Current) < step:
 		return "within write step"
