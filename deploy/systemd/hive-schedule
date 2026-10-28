@@ -11,6 +11,9 @@
 # When HIVE_AWAY_MAC is set and hive-presence hasn't seen it for HIVE_AWAY_AFTER seconds (default
 # 1800), temps above HIVE_AWAY_FLOOR (default 14) are lowered to it. HIVE_AWAY_FLOOR=off turns the
 # heating off instead. 'off' slots stay off.
+#
+# A slot which lowers the target (or turns the heating off) waits while the boiler is firing, so a
+# burn is never cut short. The next timer run applies it. Away overrides this.
 
 set -eu
 
@@ -71,12 +74,31 @@ if [ -z "$current" ]; then
 	current_slot=$last_slot
 fi
 
+away=0
+
 if [ "$current" != "off" ] && is_away && [ "$floor" = "off" ]; then
 	echo "hive-schedule: away, $current_slot slot wanted ${current}°C"
 	current=off
+	away=1
 elif [ "$current" != "off" ] && is_away && awk -v t="$current" -v f="$floor" 'BEGIN { exit !(t + 0 > f + 0) }'; then
 	echo "hive-schedule: away, $current_slot slot wanted ${current}°C"
 	current=$floor
+	away=1
+fi
+
+# Let a burn finish before lowering the target. An unreadable status applies the slot.
+if [ "$away" = 0 ]; then
+	status=$(hive status 2>/dev/null) || status=""
+
+	case "$status" in
+		*"boiler on"*)
+			target=$(echo "$status" | sed -n 's/.*target \([0-9.]*\).*/\1/p')
+			if [ "$current" = "off" ] || awk -v t="$current" -v c="${target:-0}" 'BEGIN { exit !(t + 0 < c + 0) }'; then
+				echo "hive-schedule: $current_slot slot -> ${current} deferred, boiler on"
+				exit 0
+			fi
+			;;
+	esac
 fi
 
 if [ "$current" = "off" ]; then
