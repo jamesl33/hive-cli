@@ -143,11 +143,11 @@ func (c *Control) Run(ctx context.Context) error {
 	}
 	defer feed.Close()
 
-	if c.restore {
-		return control.New(c.cfg, rooms, feed).Restore(ctx)
-	}
-
 	ctrl := control.New(c.cfg, rooms, feed)
+
+	if c.restore {
+		return ctrl.Restore(ctx)
+	}
 
 	return c.loop(ctx, feed, ctrl)
 }
