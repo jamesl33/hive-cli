@@ -9,7 +9,8 @@ import (
 
 // SetOpening tells a radiator valve to open to the percent, then asks it to report its opening so the
 // change shows up in the feed. The valve is told both the opening to use while heating and while idle,
-// since it does not report which one it follows. Battery valves apply this late.
+// since it does not report which one it follows. The valve only moves to an opening while its mode is
+// off, so every write sets that too. Battery valves apply this late.
 func (f *Feed) SetOpening(_ context.Context, valve string, percent float64) error {
 	if !f.names[valve] {
 		return fmt.Errorf("unknown device %q", valve)
@@ -37,5 +38,7 @@ func (f *Feed) SetOpening(_ context.Context, valve string, percent float64) erro
 func valvePayload(percent float64) ([]byte, error) {
 	open := int(math.Round(math.Min(100, math.Max(0, percent))))
 
-	return json.Marshal(map[string]int{"heating_valve_position": open, "idle_valve_position": open})
+	p := map[string]any{"system_mode": "off", "heating_valve_position": open, "idle_valve_position": open}
+
+	return json.Marshal(p)
 }
