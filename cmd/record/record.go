@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
 	"sync"
@@ -11,8 +12,8 @@ import (
 	"time"
 
 	"github.com/jamesl33/hive-cli/internal/history"
-	"github.com/jamesl33/hive-cli/internal/octopus"
 	"github.com/jamesl33/hive-cli/internal/measure"
+	"github.com/jamesl33/hive-cli/internal/octopus"
 	"github.com/jamesl33/hive-cli/internal/z2m"
 	"github.com/spf13/cobra"
 )
@@ -182,7 +183,7 @@ func flushLoop(ctx context.Context, log *history.Log) {
 
 		err := log.Flush(now)
 		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
+			slog.Error("flush", "error", err)
 		}
 	}
 }

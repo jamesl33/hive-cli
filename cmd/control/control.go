@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -234,7 +233,7 @@ func take(ctrl *control.Controller, reports *measure.Reports, u z2m.Update) {
 func runTick(ctx context.Context, ctrl *control.Controller, now time.Time) {
 	decisions, err := ctrl.Tick(ctx, now)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		slog.Error("tick", "error", err)
 	}
 
 	for _, d := range decisions {
