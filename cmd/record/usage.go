@@ -3,7 +3,7 @@ package record
 import (
 	"context"
 	"fmt"
-	"os"
+	"log/slog"
 	"time"
 
 	"github.com/jamesl33/hive-cli/internal/history"
@@ -16,6 +16,9 @@ const (
 
 	// usageBackfill is how far back the first fetch goes, within what the history keeps.
 	usageBackfill = 28 * 24 * time.Hour
+
+	// usageRefetch is how far back later fetches go, to pick up half hours which were published late.
+	usageRefetch = 3 * 24 * time.Hour
 
 	// gasCalorificValue is the MJ/m³ of the gas, used to convert the volume a SMETS2 meter reports to
 	// energy.
@@ -68,7 +71,7 @@ func (o meterOptions) client(key string) (*octopus.Client, error) {
 // hours already recorded aren't added again.
 func usageLoop(ctx context.Context, c *octopus.Client, log *history.Log, dir string) {
 	var (
-		after  time.Time
+		seen   map[int64]bool
 		err    error
 		loaded bool
 	)
@@ -78,16 +81,16 @@ func usageLoop(ctx context.Context, c *octopus.Client, log *history.Log, dir str
 
 	for {
 		if !loaded {
-			after, err = latestUsage(dir, metric(c.Fuel))
+			seen, err = recordedUsage(dir, metric(c.Fuel))
 			loaded = err == nil
 		}
 
 		if loaded {
-			after, err = recordUsage(ctx, c, log, after)
+			err = recordUsage(ctx, c, log, seen)
 		}
 
 		if err != nil && ctx.Err() == nil {
-			fmt.Fprintln(os.Stderr, err)
+			slog.Error("usage", "fuel", c.Fuel, "error", err)
 		}
 
 		select {
@@ -98,58 +101,70 @@ func usageLoop(ctx context.Context, c *octopus.Client, log *history.Log, dir str
 	}
 }
 
-// latestUsage returns the start of the newest half hour of the metric in the history, or the zero time
-// if there is none.
-func latestUsage(dir string, m history.Metric) (time.Time, error) {
+// recordedUsage returns the start of every half hour of the metric in the history, in seconds since the
+// epoch, which unlike a time.Time compares equal whatever its location. It is for one meter, as each
+// meter's use is its own metric.
+func recordedUsage(dir string, m history.Metric) (map[int64]bool, error) {
 	samples, err := history.Load(dir, time.Now().Add(-usageBackfill))
 	if err != nil {
-		return time.Time{}, fmt.Errorf("failed to load %s history: %w", m, err)
+		return nil, fmt.Errorf("failed to load %s history: %w", m, err)
 	}
 
-	var latest time.Time
+	seen := make(map[int64]bool)
 
 	for _, s := range samples {
 		if s.Metric == m {
-			latest = s.At
+			seen[s.At.Unix()] = true
 		}
 	}
 
-	return latest, nil
+	return seen, nil
 }
 
-// latest returns the later of the two times.
-func latest(a, b time.Time) time.Time {
-	if b.After(a) {
-		return b
+// usageFrom returns where to fetch from: a few days before the newest half hour in seen, as the API can
+// publish a half hour after a later one, or the whole backfill if there is none. Half hours before it
+// are dropped from seen, as they would never be fetched again.
+func usageFrom(seen map[int64]bool, now time.Time) time.Time {
+	from := now.Add(-usageBackfill)
+
+	var newest int64
+
+	for start := range seen {
+		newest = max(newest, start)
 	}
 
-	return a
+	refetch := time.Unix(newest, 0).Add(-usageRefetch)
+	if newest != 0 && refetch.After(from) {
+		from = refetch
+	}
+
+	for start := range seen {
+		if start < from.Unix() {
+			delete(seen, start)
+		}
+	}
+
+	return from
 }
 
-// recordUsage adds the half hours after the time to the log, returning the start of the newest.
-func recordUsage(ctx context.Context, c *octopus.Client, log *history.Log, after time.Time) (time.Time, error) {
-	from := after
-	if from.IsZero() {
-		from = time.Now().Add(-usageBackfill)
-	}
-
-	intervals, err := c.Consumption(ctx, from)
+// recordUsage adds the half hours which are not in seen to the log, and to seen.
+func recordUsage(ctx context.Context, c *octopus.Client, log *history.Log, seen map[int64]bool) error {
+	intervals, err := c.Consumption(ctx, usageFrom(seen, time.Now()))
 	if err != nil {
-		return after, err
+		return err
 	}
 
 	m := metric(c.Fuel)
-	newest := after
 
 	for _, i := range intervals {
-		if !i.Start.After(after) {
+		if seen[i.Start.Unix()] {
 			continue
 		}
 
-		log.Add(history.Sample{Device: string(m), Metric: m, At: i.Start, Value: i.KWh})
+		seen[i.Start.Unix()] = true
 
-		newest = latest(newest, i.Start)
+		log.Add(history.Sample{Device: string(m), Metric: m, At: i.Start, Value: i.KWh})
 	}
 
-	return newest, nil
+	return nil
 }

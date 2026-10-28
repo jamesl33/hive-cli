@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -34,14 +35,13 @@ func TestRecordUsage(t *testing.T) {
 
 	c := octopus.Client{BaseURL: srv.URL, Key: "k", Fuel: octopus.FuelGas, Point: "1", Serial: "2", Units: octopus.UnitsKWh}
 
-	after, err := recordUsage(t.Context(), &c, log, time.Time{})
-	require.NoError(t, err)
-	assert.Equal(t, start.Add(time.Hour), after)
+	seen := make(map[int64]bool)
+
+	require.NoError(t, recordUsage(t.Context(), &c, log, seen))
+	assert.Len(t, seen, 3)
 
 	// The same readings again add nothing
-	again, err := recordUsage(t.Context(), &c, log, after)
-	require.NoError(t, err)
-	assert.Equal(t, after, again)
+	require.NoError(t, recordUsage(t.Context(), &c, log, seen))
 
 	require.NoError(t, log.Flush(time.Now()))
 
@@ -54,9 +54,9 @@ func TestRecordUsage(t *testing.T) {
 	assert.Equal(t, 0.5, samples[1].Value)
 	assert.Equal(t, 0.5, samples[2].Value)
 
-	latest, err := latestUsage(dir, history.Gas)
+	recorded, err := recordedUsage(dir, history.Gas)
 	require.NoError(t, err)
-	assert.Equal(t, start.Add(time.Hour), latest)
+	assert.Equal(t, map[int64]bool{start.Unix(): true, start.Add(30 * time.Minute).Unix(): true, start.Add(time.Hour).Unix(): true}, recorded)
 }
 
 func TestRecordUsageOutOfOrder(t *testing.T) {
@@ -81,10 +81,7 @@ func TestRecordUsageOutOfOrder(t *testing.T) {
 
 	c := octopus.Client{BaseURL: srv.URL, Key: "k", Fuel: octopus.FuelGas, Point: "1", Serial: "2", Units: octopus.UnitsKWh}
 
-	after, err := recordUsage(t.Context(), &c, log, time.Time{})
-	require.NoError(t, err)
-	assert.Equal(t, start.Add(time.Hour), after)
-
+	require.NoError(t, recordUsage(t.Context(), &c, log, make(map[int64]bool)))
 	require.NoError(t, log.Flush(time.Now()))
 
 	samples, err := history.Load(dir, start)
@@ -112,6 +109,36 @@ func TestMeterOptionsClient(t *testing.T) {
 	assert.Zero(t, c.CalorificValue)
 }
 
+func TestRecordUsageLateHalfHour(t *testing.T) {
+	start := time.Now().UTC().Truncate(30 * time.Minute).Add(-3 * time.Hour)
+
+	results := []time.Time{start.Add(30 * time.Minute)}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		var body []string
+		for _, r := range results {
+			body = append(body, fmt.Sprintf(`{"consumption":0.5,"interval_start":%q}`, r.Format(time.RFC3339)))
+		}
+
+		fmt.Fprintf(w, `{"results":[%s]}`, strings.Join(body, ","))
+	}))
+	defer srv.Close()
+
+	log, err := history.OpenLog(t.TempDir())
+	require.NoError(t, err)
+
+	c := octopus.Client{BaseURL: srv.URL, Key: "k", Fuel: octopus.FuelGas, Point: "1", Serial: "2", Units: octopus.UnitsKWh}
+	seen := make(map[int64]bool)
+
+	require.NoError(t, recordUsage(t.Context(), &c, log, seen))
+
+	// An earlier half hour published afterwards is still picked up
+	results = append(results, start)
+
+	require.NoError(t, recordUsage(t.Context(), &c, log, seen))
+	assert.Len(t, seen, 2)
+}
+
 func TestRecordUsageElectricity(t *testing.T) {
 	start := time.Now().UTC().Truncate(30 * time.Minute).Add(-time.Hour)
 
@@ -128,8 +155,7 @@ func TestRecordUsageElectricity(t *testing.T) {
 
 	c := octopus.Client{BaseURL: srv.URL, Key: "k", Fuel: octopus.FuelElectricity, Point: "1", Serial: "2"}
 
-	_, err = recordUsage(t.Context(), &c, log, time.Time{})
-	require.NoError(t, err)
+	require.NoError(t, recordUsage(t.Context(), &c, log, make(map[int64]bool)))
 	require.NoError(t, log.Flush(time.Now()))
 
 	samples, err := history.Load(dir, start)
@@ -138,4 +164,20 @@ func TestRecordUsageElectricity(t *testing.T) {
 	assert.Equal(t, history.Electricity, samples[0].Metric)
 	assert.Equal(t, "electricity", samples[0].Device)
 	assert.Equal(t, 0.3, samples[0].Value)
+}
+
+func TestUsageFrom(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+
+	assert.True(t, now.Add(-usageBackfill).Equal(usageFrom(map[int64]bool{}, now)))
+
+	// After an outage longer than the refetch the fetch starts from the newest half hour recorded
+	old := now.Add(-10 * 24 * time.Hour)
+	seen := map[int64]bool{old.Unix(): true, old.Add(-time.Hour).Unix(): true}
+	assert.True(t, old.Add(-usageRefetch).Equal(usageFrom(seen, now)))
+
+	// Half hours before the fetch are forgotten
+	seen = map[int64]bool{now.Unix(): true, now.Add(-usageRefetch - time.Hour).Unix(): true}
+	usageFrom(seen, now)
+	assert.Equal(t, map[int64]bool{now.Unix(): true}, seen)
 }
