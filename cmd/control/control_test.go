@@ -26,6 +26,22 @@ func TestParseRoom(t *testing.T) {
 	}
 }
 
+func TestOffDefaultsToLanding(t *testing.T) {
+	cmd := NewControl(nil)
+
+	off, err := cmd.Flags().GetStringArray("off")
+	require.NoError(t, err)
+
+	assert.Equal(t, []string{"landing"}, off)
+
+	require.NoError(t, cmd.Flags().Parse([]string{"--off="}))
+
+	off, err = cmd.Flags().GetStringArray("off")
+	require.NoError(t, err)
+
+	assert.Empty(t, off)
+}
+
 func TestTurnOff(t *testing.T) {
 	rooms := []control.Room{{Name: "office"}, {Name: "landing"}}
 
@@ -34,6 +50,11 @@ func TestTurnOff(t *testing.T) {
 	assert.True(t, rooms[1].Off)
 
 	assert.Error(t, turnOff(rooms, []string{"lounge"}))
+
+	rooms = []control.Room{{Name: "office"}}
+
+	require.NoError(t, turnOff(rooms, []string{""}))
+	assert.False(t, rooms[0].Off)
 }
 
 func TestParseRoomInvalid(t *testing.T) {

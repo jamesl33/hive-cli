@@ -120,10 +120,11 @@ func NewControl(options *z2m.Options) *cobra.Command {
 		"room to log what would be done for but never write, as name=sensor:valve",
 	)
 
+	// TODO(jamesl33): Extract the default off rooms, they are only right for my house.
 	flags.StringArrayVar(
 		&c.off,
 		"off",
-		nil,
+		[]string{"landing"},
 		"name of a controlled room to hold the valve closed in; repeat for each room",
 	)
 
@@ -277,6 +278,11 @@ func (c *Control) parseRooms() ([]control.Room, error) {
 // turnOff sets the named rooms to be off, which must all be rooms being controlled.
 func turnOff(rooms []control.Room, names []string) error {
 	for _, name := range names {
+		// An empty name, as in --off "", turns off nothing
+		if name == "" {
+			continue
+		}
+
 		found := false
 
 		for i := range rooms {
