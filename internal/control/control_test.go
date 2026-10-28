@@ -276,7 +276,12 @@ func TestReady(t *testing.T) {
 
 func TestRestore(t *testing.T) {
 	v := &recorder{}
-	c := rig(v, office, Room{Name: "landing", Sensor: "tah_landing", Valve: "trv_landing"})
+	c := rig(
+		v,
+		office,
+		Room{Name: "landing", Sensor: "tah_landing", Valve: "trv_landing"},
+		Room{Name: "lounge", Sensor: "tah_lounge", Valve: "trv_kitchen", Observe: true},
+	)
 
 	require.NoError(t, c.Restore(t.Context()))
 	assert.Equal(t, map[string]float64{"trv_office": 100, "trv_landing": 100}, v.set)

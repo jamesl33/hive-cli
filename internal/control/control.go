@@ -280,11 +280,15 @@ func (c *Controller) tickRoom(ctx context.Context, rs *roomState, now time.Time)
 	return d, nil
 }
 
-// Restore opens every valve fully.
+// Restore opens every valve fully, except the observed ones as they are never written.
 func (c *Controller) Restore(ctx context.Context) error {
 	var errs []error
 
 	for _, rs := range c.rooms {
+		if rs.Observe {
+			continue
+		}
+
 		err := c.valves.SetOpening(ctx, rs.Valve, 100)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("failed to open %s: %w", rs.Valve, err))
