@@ -104,10 +104,12 @@ func TestMeterOptionsClient(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "1", c.Point)
 	assert.Equal(t, octopus.UnitsM3, c.Units)
+	assert.NotZero(t, c.CalorificValue)
 
 	c, err = meterOptions{fuel: octopus.FuelElectricity, point: "3", serial: "4"}.client("k")
 	require.NoError(t, err)
 	assert.Equal(t, octopus.FuelElectricity, c.Fuel)
+	assert.Zero(t, c.CalorificValue)
 }
 
 func TestRecordUsageElectricity(t *testing.T) {

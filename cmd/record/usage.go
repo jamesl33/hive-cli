@@ -47,13 +47,17 @@ func (o meterOptions) client(key string) (*octopus.Client, error) {
 	}
 
 	c := octopus.Client{
-		BaseURL:        octopus.BaseURL,
-		Key:            key,
-		Fuel:           o.fuel,
-		Point:          o.point,
-		Serial:         o.serial,
-		Units:          octopus.UnitsM3,
-		CalorificValue: gasCalorificValue,
+		BaseURL: octopus.BaseURL,
+		Key:     key,
+		Fuel:    o.fuel,
+		Point:   o.point,
+		Serial:  o.serial,
+	}
+
+	// Electricity meters report energy already
+	if o.fuel == octopus.FuelGas {
+		c.Units = octopus.UnitsM3
+		c.CalorificValue = gasCalorificValue
 	}
 
 	return &c, nil
