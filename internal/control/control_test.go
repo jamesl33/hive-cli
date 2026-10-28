@@ -439,3 +439,22 @@ func TestStaleSensorOpensWithoutTarget(t *testing.T) {
 	assert.True(t, d[0].Stale)
 	assert.Equal(t, 100.0, v.set["trv_office"])
 }
+
+func TestCloseSoonAfterOpenIsHeld(t *testing.T) {
+	v := &recorder{}
+	c := rig(v)
+	c.SetOpening("trv_office", 40)
+	c.Add(history.Sample{Device: "tah_office", Metric: history.Temperature, At: start, Value: 14.0})
+
+	d, err := c.Tick(t.Context(), start)
+	require.NoError(t, err)
+	require.True(t, d[0].Written)
+
+	// A warm reading right after would close the valve to 35, which is held back
+	c.Add(history.Sample{Device: "tah_office", Metric: history.Temperature, At: start.Add(time.Minute), Value: 15.5})
+	d, err = c.Tick(t.Context(), start.Add(time.Minute))
+	require.NoError(t, err)
+
+	assert.False(t, d[0].Written)
+	assert.Equal(t, "write limit", d[0].Reason)
+}

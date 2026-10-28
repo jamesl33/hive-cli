@@ -227,6 +227,9 @@ type roomState struct {
 
 	// lastWrite is when the valve was last written to.
 	lastWrite time.Time
+
+	// lastOpen is when the valve was last written to open further.
+	lastOpen time.Time
 }
 
 // reading is a temperature report.
@@ -325,6 +328,10 @@ func (c *Controller) tickRoom(ctx context.Context, rs *roomState, now time.Time)
 	}
 
 	rs.lastWrite = now
+	if d.Opening > d.Current {
+		rs.lastOpen = now
+	}
+
 	c.openings[rs.Valve] = d.Opening
 
 	return d, nil
@@ -442,8 +449,10 @@ func (c *Controller) opening(err, floor float64) float64 {
 
 // blocked says why the valve should not be written to, or returns empty if it should. An urgent
 // write is one which makes the house safe, which is not held back by the limits on writes. A close is
-// only held back by the write step, except to the floor, as every minute of delay is overshoot.
+// held back by the write step, and by a recent open, except to the floor, as every minute of delay is
+// overshoot.
 // A valve below the floor is raised to it at once, as the boiler would run against closed valves.
+// A close shortly after an open is held back, so a noisy reading does not make the valve flap.
 // Opening fully is never held back by the write step, or a cold room could stop short of fully open.
 func (c *Controller) blocked(rs *roomState, now time.Time, d Decision, floor float64, urgent bool) string {
 	closing := d.Opening < d.Current
@@ -459,6 +468,8 @@ func (c *Controller) blocked(rs *roomState, now time.Time, d Decision, floor flo
 		return ""
 	case math.Abs(d.Opening-d.Current) < step:
 		return "within write step"
+	case closing && !rs.lastOpen.IsZero() && now.Sub(rs.lastOpen) < c.cfg.WriteEvery:
+		return "write limit"
 	case urgent, closing:
 		return ""
 	case !rs.lastWrite.IsZero() && now.Sub(rs.lastWrite) < c.cfg.WriteEvery:
