@@ -108,7 +108,7 @@ func NewControl(options *z2m.Options) *cobra.Command {
 	flags.StringArrayVar(
 		&c.rooms,
 		"room",
-		[]string{"office=tah_office:trv_office:-1.5", "landing=tah_landing:trv_landing", "bedroom=tah_bedroom:trv_bedroom"},
+		[]string{"office=tah_office:trv_office:-1.5", "landing=tah_landing:trv_landing", "bedroom=tah_bedroom:trv_bedroom", "stairs=tah_stairs:trv_stairs"},
 		"room to control, as name=sensor:valve[:offset], where offset is °C above the thermostat target; repeat for each room",
 	)
 
@@ -116,7 +116,7 @@ func NewControl(options *z2m.Options) *cobra.Command {
 	flags.StringArrayVar(
 		&c.observe,
 		"observe",
-		[]string{"lounge=tah_lounge:trv_kitchen", "stairs=tah_stairs:trv_stairs"},
+		[]string{"lounge=tah_lounge:trv_kitchen"},
 		"room to log what would be done for but never write, as name=sensor:valve",
 	)
 

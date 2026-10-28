@@ -51,7 +51,7 @@ Check on it with `journalctl -u hive-record` and `ls -l /var/lib/hive`.
 
 - `ExecStopPost=… --restore` opens every valve again when the service stops or crashes, as TRVs keep their last opening if it dies. `systemctl restart` skips it, so valves keep their opening.
 - Every write also sets the valve's mode to `off`, as a TRV-ZBT only moves to an opening in that mode. Valves stay in `off` after the service stops.
-- Rooms are `--room name=sensor:valve[:offset]`, where `offset` is the °C above the thermostat target to hold the room at, for example `office=tah_office:trv_office:-1.5`. `--off name` holds that room's valve closed (0%), whatever the temperature. Give it to both `ExecStart` and `ExecStopPost`, or `--restore` opens that valve again when the service stops. `--observe` rooms are logged but never written (the lounge and stairs by default).
+- Rooms are `--room name=sensor:valve[:offset]`, where `offset` is the °C above the thermostat target to hold the room at, for example `office=tah_office:trv_office:-1.5`. `--off name` holds that room's valve closed (0%), whatever the temperature. Give it to both `ExecStart` and `ExecStopPost`, or `--restore` opens that valve again when the service stops. `--observe` rooms are logged but never written (the lounge by default).
 - It does nothing while the thermostat has no target (heating off), except to close `--off` rooms.
 - `journalctl -u hive-control -f` shows temperature, rate, wanted and current opening per room; `hive control --restore` opens every valve fully, except the `--off` and `--observe` ones.
 
