@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"math"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -106,7 +108,7 @@ func NewControl(options *z2m.Options) *cobra.Command {
 		&c.rooms,
 		"room",
 		[]string{"office=tah_office:trv_office", "landing=tah_landing:trv_landing", "bedroom=tah_bedroom:trv_bedroom"},
-		"room to control, as name=sensor:valve; repeat for each room",
+		"room to control, as name=sensor:valve[:offset], where offset is °C above the thermostat target; repeat for each room",
 	)
 
 	// TODO(jamesl33): Extract the default observed rooms, they are only right for my house.
@@ -259,7 +261,7 @@ func (c *Control) parseRooms() ([]control.Room, error) {
 	return append(rooms, observed...), nil
 }
 
-// parseSpecs parses rooms given as name=sensor:valve, which are only observed if observe is set.
+// parseSpecs parses rooms given as name=sensor:valve[:offset], which are only observed if observe is set.
 func parseSpecs(specs []string, observe bool) ([]control.Room, error) {
 	var rooms []control.Room
 
@@ -277,16 +279,28 @@ func parseSpecs(specs []string, observe bool) ([]control.Room, error) {
 	return rooms, nil
 }
 
-// parseRoom parses a room given as name=sensor:valve.
+// parseRoom parses a room given as name=sensor:valve, with an optional :offset on the end which is how
+// many °C above the target of the thermostat to hold the room.
 func parseRoom(spec string) (control.Room, error) {
 	name, devices, ok := strings.Cut(spec, "=")
-	sensor, valve, ok2 := strings.Cut(devices, ":")
+	parts := strings.Split(devices, ":")
 
-	if !ok || !ok2 || name == "" || sensor == "" || valve == "" {
-		return control.Room{}, fmt.Errorf("room %q is not name=sensor:valve", spec)
+	if !ok || len(parts) < 2 || len(parts) > 3 || name == "" || parts[0] == "" || parts[1] == "" {
+		return control.Room{}, fmt.Errorf("room %q is not name=sensor:valve[:offset]", spec)
 	}
 
-	r := control.Room{Name: name, Sensor: sensor, Valve: valve}
+	r := control.Room{Name: name, Sensor: parts[0], Valve: parts[1]}
+
+	if len(parts) == 2 {
+		return r, nil
+	}
+
+	offset, err := strconv.ParseFloat(parts[2], 64)
+	if err != nil || math.IsNaN(offset) || math.IsInf(offset, 0) {
+		return control.Room{}, fmt.Errorf("room %q has an offset which is not a number: %q", spec, parts[2])
+	}
+
+	r.Offset = offset
 
 	return r, nil
 }
