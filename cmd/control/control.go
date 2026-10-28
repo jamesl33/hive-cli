@@ -274,9 +274,14 @@ func (c *Control) parseRooms() ([]control.Room, error) {
 	return append(rooms, observed...), nil
 }
 
-// turnOff sets the named rooms to be off, which must all be rooms being controlled.
+// turnOff sets the named rooms to be off, which must all be rooms being controlled, except for the empty name.
 func turnOff(rooms []control.Room, names []string) error {
 	for _, name := range names {
+		// An empty name, as in --off "", turns off nothing
+		if name == "" {
+			continue
+		}
+
 		found := false
 
 		for i := range rooms {
