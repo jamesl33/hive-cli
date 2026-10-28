@@ -35,3 +35,21 @@ func TestParseUpdate(t *testing.T) {
 		assert.Equal(t, tt.device, u.Device, name)
 	}
 }
+
+func TestLastSeen(t *testing.T) {
+	at := time.Unix(10000, 0)
+
+	for name, tc := range map[string]struct {
+		payload map[string]any
+		want    time.Time
+	}{
+		"none":     {map[string]any{}, at},
+		"iso":      {map[string]any{"last_seen": "1970-01-01T00:00:10Z"}, time.Unix(10, 0)},
+		"epoch":    {map[string]any{"last_seen": 5000000.0}, time.Unix(5000, 0)},
+		"future":   {map[string]any{"last_seen": 20000000.0}, at},
+		"garbage":  {map[string]any{"last_seen": "yesterday"}, at},
+		"wrongtyp": {map[string]any{"last_seen": true}, at},
+	} {
+		assert.True(t, tc.want.Equal(lastSeen(tc.payload, at)), name)
+	}
+}

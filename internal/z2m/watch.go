@@ -141,5 +141,33 @@ func parseUpdate(m mqtt.Message, at time.Time, names map[string]bool) (Update, b
 		return Update{}, false
 	}
 
-	return Update{Device: device, At: at, Payload: payload}, true
+	return Update{Device: device, At: lastSeen(payload, at), Payload: payload}, true
+}
+
+// lastSeen returns when the device last reported according to Zigbee2MQTT, or the time the message was
+// received if the report has no usable last_seen (it needs advanced.last_seen set to ISO_8601 or epoch).
+// A replayed retained message would otherwise look as new as a live one. A time ahead of the message is
+// ignored, as the clocks disagree.
+func lastSeen(payload map[string]any, received time.Time) time.Time {
+	var seen time.Time
+
+	switch v := payload["last_seen"].(type) {
+	case string:
+		t, err := time.Parse(time.RFC3339, v)
+		if err != nil {
+			return received
+		}
+
+		seen = t
+	case float64:
+		seen = time.UnixMilli(int64(v))
+	default:
+		return received
+	}
+
+	if seen.After(received) {
+		return received
+	}
+
+	return seen
 }
