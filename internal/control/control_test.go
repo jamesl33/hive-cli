@@ -3,6 +3,7 @@ package control
 import (
 	"context"
 	"errors"
+	"math"
 	"testing"
 	"time"
 
@@ -386,4 +387,33 @@ func TestRestoreSkipsOffValves(t *testing.T) {
 
 	require.NoError(t, c.Restore(t.Context()))
 	assert.Equal(t, map[string]float64{"trv_office": 100}, v.set)
+}
+
+func TestValidate(t *testing.T) {
+	require.NoError(t, DefaultConfig().Validate())
+
+	for name, mutate := range map[string]func(*Config){
+		"kp":     func(c *Config) { c.Kp = 0 },
+		"min":    func(c *Config) { c.Min = 101 },
+		"lead":   func(c *Config) { c.Lead = -1 },
+		"window": func(c *Config) { c.Window = 0 },
+		"stale":  func(c *Config) { c.Stale = 0 },
+		"round":  func(c *Config) { c.Round = 0 },
+		"nan":    func(c *Config) { c.Kp = math.NaN() },
+	} {
+		t.Run(name, func(t *testing.T) {
+			c := DefaultConfig()
+			mutate(&c)
+
+			assert.Error(t, c.Validate())
+		})
+	}
+}
+
+func TestValidateRooms(t *testing.T) {
+	a := Room{Name: "a", Sensor: "s1", Valve: "v1"}
+
+	require.NoError(t, ValidateRooms([]Room{a, {Name: "b", Sensor: "s1", Valve: "v2"}}))
+	assert.Error(t, ValidateRooms([]Room{a, {Name: "a", Sensor: "s2", Valve: "v2"}}))
+	assert.Error(t, ValidateRooms([]Room{a, {Name: "b", Sensor: "s2", Valve: "v1"}}))
 }

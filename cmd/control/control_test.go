@@ -58,3 +58,23 @@ func TestParseRoomInvalid(t *testing.T) {
 		})
 	}
 }
+
+func TestParseRoomsRejectsDuplicates(t *testing.T) {
+	c := Control{rooms: []string{"a=s1:v1", "a=s2:v2"}}
+	_, err := c.parseRooms()
+	assert.Error(t, err)
+
+	c = Control{rooms: []string{"a=s1:v1"}, observe: []string{"b=s2:v1"}}
+	_, err = c.parseRooms()
+	assert.Error(t, err)
+
+	c = Control{rooms: []string{"a=s1:v1"}, observe: []string{"b=s2:v2"}}
+	_, err = c.parseRooms()
+	assert.NoError(t, err)
+}
+
+func TestRunRejectsBadTick(t *testing.T) {
+	c := Control{tick: 0}
+
+	assert.Error(t, c.Run(t.Context()))
+}

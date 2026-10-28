@@ -92,6 +92,53 @@ func DefaultConfig() Config {
 	return c
 }
 
+// Validate returns an error if the configuration would make the controller misbehave.
+func (c Config) Validate() error {
+	switch {
+	case !(c.Kp > 0):
+		return fmt.Errorf("kp must be above 0, not %v", c.Kp)
+	case !(c.Min >= 0 && c.Min <= 100):
+		return fmt.Errorf("min must be from 0 to 100, not %v", c.Min)
+	case c.Lead < 0:
+		return fmt.Errorf("lead must not be negative, not %v", c.Lead)
+	case c.Window <= 0:
+		return fmt.Errorf("window must be above 0, not %v", c.Window)
+	case c.Stale <= 0:
+		return fmt.Errorf("stale must be above 0, not %v", c.Stale)
+	case c.WriteEvery < 0:
+		return fmt.Errorf("write-every must not be negative, not %v", c.WriteEvery)
+	case !(c.WriteMin >= 0):
+		return fmt.Errorf("write-min must not be negative, not %v", c.WriteMin)
+	case !(c.Round > 0):
+		return fmt.Errorf("round must be above 0, not %v", c.Round)
+	}
+
+	return nil
+}
+
+// ValidateRooms returns an error if two rooms share a name or a valve.
+func ValidateRooms(rooms []Room) error {
+	names := make(map[string]bool, len(rooms))
+	valves := make(map[string]string, len(rooms))
+
+	for _, r := range rooms {
+		if names[r.Name] {
+			return fmt.Errorf("room %q is given more than once", r.Name)
+		}
+
+		names[r.Name] = true
+
+		other, ok := valves[r.Valve]
+		if ok {
+			return fmt.Errorf("rooms %q and %q share the valve %q", other, r.Name, r.Valve)
+		}
+
+		valves[r.Valve] = r.Name
+	}
+
+	return nil
+}
+
 // Room is a room to control: one temperature sensor and the radiator valve which heats it.
 type Room struct {
 	// Name is the name of the room, used in logs.

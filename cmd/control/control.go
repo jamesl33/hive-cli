@@ -132,6 +132,15 @@ func NewControl(options *z2m.Options) *cobra.Command {
 // Run controls the valves until the context is cancelled. It leaves them as they are, as a restart
 // would only open them to put them back; the service opens them with --restore when it stops.
 func (c *Control) Run(ctx context.Context) error {
+	if c.tick <= 0 {
+		return fmt.Errorf("tick must be above 0, not %v", c.tick)
+	}
+
+	err := c.cfg.Validate()
+	if err != nil {
+		return err
+	}
+
 	rooms, err := c.parseRooms()
 	if err != nil {
 		return err
@@ -270,7 +279,14 @@ func (c *Control) parseRooms() ([]control.Room, error) {
 		return nil, err
 	}
 
-	return append(rooms, observed...), nil
+	rooms = append(rooms, observed...)
+
+	err = control.ValidateRooms(rooms)
+	if err != nil {
+		return nil, err
+	}
+
+	return rooms, nil
 }
 
 // turnOff sets the named rooms to be off, which must all be rooms being controlled, except for the empty name.
