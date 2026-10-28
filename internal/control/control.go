@@ -362,14 +362,10 @@ func (c *Controller) decide(rs *roomState, now time.Time) Decision {
 		return c.decideOff(rs, d)
 	}
 
-	if c.target == nil {
-		d.Opening = d.Current
-		d.Reason = "no target"
-
-		return d
+	if c.target != nil {
+		d.Target = *c.target + rs.Offset
 	}
 
-	d.Target = *c.target + rs.Offset
 	floor := c.floor()
 
 	t, ok := c.temps[rs.Sensor]
@@ -380,6 +376,14 @@ func (c *Controller) decide(rs *roomState, now time.Time) Decision {
 		d.Opening = 100
 		d.Reason = c.blocked(rs, now, d, floor, true)
 		d.Written = d.Reason == ""
+
+		return d
+	}
+
+	if c.target == nil {
+		d.Temperature = t.value
+		d.Opening = d.Current
+		d.Reason = "no target"
 
 		return d
 	}

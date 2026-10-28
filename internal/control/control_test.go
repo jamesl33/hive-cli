@@ -427,3 +427,15 @@ func TestOpensFullyPastTheWriteStep(t *testing.T) {
 
 	assert.Equal(t, 100.0, v.set["trv_office"])
 }
+
+func TestStaleSensorOpensWithoutTarget(t *testing.T) {
+	v := &recorder{}
+	c := New(DefaultConfig(), []Room{office}, v)
+	c.SetOpening("trv_office", 25)
+
+	d, err := c.Tick(t.Context(), start)
+	require.NoError(t, err)
+
+	assert.True(t, d[0].Stale)
+	assert.Equal(t, 100.0, v.set["trv_office"])
+}
