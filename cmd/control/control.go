@@ -25,6 +25,7 @@ type Control struct {
 	restore bool
 	rooms   []string
 	observe []string
+	off     []string
 }
 
 // NewControl creates a new command for closing the radiator valves of rooms which are warm.
@@ -117,6 +118,13 @@ func NewControl(options *z2m.Options) *cobra.Command {
 		"observe",
 		[]string{"lounge=tah_lounge:trv_kitchen", "stairs=tah_stairs:trv_stairs"},
 		"room to log what would be done for but never write, as name=sensor:valve",
+	)
+
+	flags.StringArrayVar(
+		&c.off,
+		"off",
+		nil,
+		"name of a controlled room to hold the valve closed in; repeat for each room",
 	)
 
 	return &cmd
@@ -258,7 +266,34 @@ func (c *Control) parseRooms() ([]control.Room, error) {
 		return nil, err
 	}
 
+	err = turnOff(rooms, c.off)
+	if err != nil {
+		return nil, err
+	}
+
 	return append(rooms, observed...), nil
+}
+
+// turnOff sets the named rooms to be off, which must all be rooms being controlled.
+func turnOff(rooms []control.Room, names []string) error {
+	for _, name := range names {
+		found := false
+
+		for i := range rooms {
+			if rooms[i].Name != name {
+				continue
+			}
+
+			rooms[i].Off = true
+			found = true
+		}
+
+		if !found {
+			return fmt.Errorf("cannot turn off %q, which is not a controlled room", name)
+		}
+	}
+
+	return nil
 }
 
 // parseSpecs parses rooms given as name=sensor:valve[:offset], which are only observed if observe is set.

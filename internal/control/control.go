@@ -108,6 +108,9 @@ type Room struct {
 
 	// Observe works out what the valve would be set to without ever writing it.
 	Observe bool
+
+	// Off holds the valve closed, whatever the room temperature is.
+	Off bool
 }
 
 // Valves sets the opening of radiator valves.
@@ -280,12 +283,13 @@ func (c *Controller) tickRoom(ctx context.Context, rs *roomState, now time.Time)
 	return d, nil
 }
 
-// Restore opens every valve fully, except the observed ones as they are never written.
+// Restore opens every valve fully, except the observed ones as they are never written, and the ones
+// which are off.
 func (c *Controller) Restore(ctx context.Context) error {
 	var errs []error
 
 	for _, rs := range c.rooms {
-		if rs.Observe {
+		if rs.Observe || rs.Off {
 			continue
 		}
 
@@ -305,6 +309,10 @@ func (c *Controller) decide(rs *roomState, now time.Time) Decision {
 	current, ok := c.openings[rs.Valve]
 	if ok {
 		d.Current = current
+	}
+
+	if rs.Off && !rs.Observe {
+		return c.decideOff(rs, d)
 	}
 
 	if c.target == nil {
@@ -338,6 +346,25 @@ func (c *Controller) decide(rs *roomState, now time.Time) Decision {
 
 	d.Reason = c.blocked(rs, now, d, floor, false)
 	d.Written = d.Reason == ""
+
+	return d
+}
+
+// decideOff closes the valve of a room which is off, writing only if it is not closed. The write limits
+// and the floor do not apply, as the room is meant to take no heat. The temperature is still reported.
+func (c *Controller) decideOff(rs *roomState, d Decision) Decision {
+	t, ok := c.temps[rs.Sensor]
+	if ok {
+		d.Temperature = t.value
+	}
+
+	if d.Current == 0 {
+		d.Reason = "off"
+
+		return d
+	}
+
+	d.Written = true
 
 	return d
 }

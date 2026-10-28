@@ -335,3 +335,55 @@ func TestRaisesToMinWhenObservedValveCloses(t *testing.T) {
 	assert.True(t, d.Written)
 	assert.Equal(t, 10.0, v.set["trv_office"])
 }
+
+func TestOffClosesValveFully(t *testing.T) {
+	v := &recorder{}
+	r := office
+	r.Off = true
+	c := rig(v, r)
+	c.SetOpening("trv_office", 100)
+	c.rooms[0].lastWrite = start
+
+	d := run(t, c, 0, steady(10))[0]
+
+	assert.True(t, d.Written)
+	assert.Equal(t, 0.0, d.Opening)
+	assert.Equal(t, 10.0, d.Temperature)
+	assert.Equal(t, 0.0, v.set["trv_office"])
+}
+
+func TestOffWritesNothingOnceClosed(t *testing.T) {
+	v := &recorder{}
+	r := office
+	r.Off = true
+	c := rig(v, r)
+	c.SetOpening("trv_office", 0)
+
+	d := run(t, c, 30, steady(10))[0]
+
+	assert.False(t, d.Written)
+	assert.Equal(t, "off", d.Reason)
+	assert.Empty(t, v.set)
+}
+
+func TestOffClosesWithoutTarget(t *testing.T) {
+	v := &recorder{}
+	r := office
+	r.Off = true
+	c := New(DefaultConfig(), []Room{r}, v)
+
+	d, err := c.Tick(t.Context(), start)
+	require.NoError(t, err)
+
+	assert.True(t, d[0].Written)
+	assert.Equal(t, 0.0, v.set["trv_office"])
+}
+
+func TestRestoreSkipsOffValves(t *testing.T) {
+	v := &recorder{}
+	landing := Room{Name: "landing", Sensor: "tah_landing", Valve: "trv_landing", Off: true}
+	c := rig(v, office, landing)
+
+	require.NoError(t, c.Restore(t.Context()))
+	assert.Equal(t, map[string]float64{"trv_office": 100}, v.set)
+}

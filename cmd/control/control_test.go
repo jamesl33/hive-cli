@@ -26,6 +26,16 @@ func TestParseRoom(t *testing.T) {
 	}
 }
 
+func TestTurnOff(t *testing.T) {
+	rooms := []control.Room{{Name: "office"}, {Name: "landing"}}
+
+	require.NoError(t, turnOff(rooms, []string{"landing"}))
+	assert.False(t, rooms[0].Off)
+	assert.True(t, rooms[1].Off)
+
+	assert.Error(t, turnOff(rooms, []string{"lounge"}))
+}
+
 func TestParseRoomInvalid(t *testing.T) {
 	for _, spec := range []string{"", "office", "office=tah_office", "=a:b", "o=:b", "o=a:", "o=a:b:", "o=a:b:warm", "o=a:b:NaN", "o=a:b:Inf", "o=a:b:-Inf", "o=a:b:1:2"} {
 		t.Run(spec, func(t *testing.T) {
