@@ -10,9 +10,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/jamesl33/hive-cli/internal/dashboard"
 	"github.com/jamesl33/hive-cli/internal/history"
 	"github.com/jamesl33/hive-cli/internal/octopus"
+	"github.com/jamesl33/hive-cli/internal/measure"
 	"github.com/jamesl33/hive-cli/internal/z2m"
 	"github.com/spf13/cobra"
 )
@@ -142,7 +142,7 @@ func (r *Record) Run(ctx context.Context) error {
 
 // consume adds the measurements in the feed to the log until the context is cancelled or the feed fails.
 func consume(ctx context.Context, feed *z2m.Feed, log *history.Log) error {
-	reports := dashboard.NewReports(feed.Receiver)
+	reports := measure.NewReports(feed.Receiver)
 
 	for {
 		u, err := feed.Next(ctx)

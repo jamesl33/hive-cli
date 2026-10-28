@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/jamesl33/hive-cli/internal/control"
-	"github.com/jamesl33/hive-cli/internal/dashboard"
+	"github.com/jamesl33/hive-cli/internal/measure"
 	"github.com/jamesl33/hive-cli/internal/z2m"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
@@ -189,7 +189,7 @@ func forward(ctx context.Context, feed *z2m.Feed, updates chan<- z2m.Update) err
 // process feeds the reports to the controller and works out the valves every tick until the context is
 // cancelled.
 func (c *Control) process(ctx context.Context, feed *z2m.Feed, ctrl *control.Controller, updates <-chan z2m.Update) error {
-	reports := dashboard.NewReports(feed.Receiver)
+	reports := measure.NewReports(feed.Receiver)
 
 	t := time.NewTicker(c.tick)
 	defer t.Stop()
@@ -219,7 +219,7 @@ func (c *Control) process(ctx context.Context, feed *z2m.Feed, ctrl *control.Con
 }
 
 // take gives the controller the measurements in a report, and the opening if it is from a valve.
-func take(ctrl *control.Controller, reports *dashboard.Reports, u z2m.Update) {
+func take(ctrl *control.Controller, reports *measure.Reports, u z2m.Update) {
 	for _, s := range reports.Samples(u) {
 		ctrl.Add(s)
 	}
