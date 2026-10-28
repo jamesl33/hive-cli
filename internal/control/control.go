@@ -222,7 +222,7 @@ type Controller struct {
 type roomState struct {
 	Room
 
-	// points are the readings of the room on recent ticks, one per tick.
+	// points are the recent readings of the room, one per report.
 	points []point
 
 	// lastWrite is when the valve was last written to.
@@ -395,7 +395,7 @@ func (c *Controller) decide(rs *roomState, now time.Time) Decision {
 		return d
 	}
 
-	rs.add(now, t.value, c.cfg.Window)
+	rs.add(now, t.at, t.value, c.cfg.Window)
 
 	d.Temperature = t.value
 	d.Rate = rs.rate(c.cfg.MinPoints) * 60
@@ -479,9 +479,13 @@ func (c *Controller) blocked(rs *roomState, now time.Time, d Decision, floor flo
 	return ""
 }
 
-// add records a reading and forgets anything older than the window.
-func (rs *roomState) add(now time.Time, value float64, window time.Duration) {
-	rs.points = append(rs.points, point{at: now, value: value})
+// add records a reading made at the time, unless it was already recorded, and forgets anything older
+// than the window. Only new readings count, as a sensor which has not reported would repeat its last one.
+func (rs *roomState) add(now, at time.Time, value float64, window time.Duration) {
+	last := len(rs.points) - 1
+	if last < 0 || !rs.points[last].at.Equal(at) {
+		rs.points = append(rs.points, point{at: at, value: value})
+	}
 
 	for len(rs.points) > 0 && now.Sub(rs.points[0].at) > window {
 		rs.points = rs.points[1:]

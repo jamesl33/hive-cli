@@ -292,7 +292,8 @@ func TestRate(t *testing.T) {
 	rs := &roomState{}
 
 	for m := range 12 {
-		rs.add(start.Add(time.Duration(m)*5*time.Minute), 15+float64(m)*0.1, time.Hour)
+		at := start.Add(time.Duration(m) * 5 * time.Minute)
+		rs.add(at, at, 15+float64(m)*0.1, time.Hour)
 	}
 
 	assert.InDelta(t, 0.02, rs.rate(6), 1e-9)
@@ -457,4 +458,14 @@ func TestCloseSoonAfterOpenIsHeld(t *testing.T) {
 
 	assert.False(t, d[0].Written)
 	assert.Equal(t, "write limit", d[0].Reason)
+}
+
+func TestRateIgnoresRepeatedReadings(t *testing.T) {
+	rs := &roomState{}
+
+	for m := range 12 {
+		rs.add(start.Add(time.Duration(m)*5*time.Minute), start, 15, time.Hour)
+	}
+
+	assert.Len(t, rs.points, 1)
 }
