@@ -213,13 +213,26 @@ func TestStaleSensorOpensFully(t *testing.T) {
 	c.SetOpening("trv_office", 25)
 	c.Add(history.Sample{Device: "tah_office", Metric: history.Temperature, At: start, Value: 17.5})
 
-	d, err := c.Tick(t.Context(), start.Add(31*time.Minute))
+	d, err := c.Tick(t.Context(), start.Add(2*time.Hour+time.Minute))
 	require.NoError(t, err)
 
 	assert.True(t, d[0].Stale)
 	assert.Equal(t, 100.0, d[0].Opening)
 	assert.True(t, d[0].Written)
 	assert.Equal(t, 100.0, v.set["trv_office"])
+}
+
+func TestQuietSensorIsNotStale(t *testing.T) {
+	v := &recorder{}
+	c := rig(v)
+	c.SetOpening("trv_office", 10)
+	c.Add(history.Sample{Device: "tah_office", Metric: history.Temperature, At: start, Value: 17.5})
+
+	d, err := c.Tick(t.Context(), start.Add(90*time.Minute))
+	require.NoError(t, err)
+
+	assert.False(t, d[0].Stale)
+	assert.Empty(t, v.set)
 }
 
 func TestStaleSensorIgnoresWriteLimit(t *testing.T) {

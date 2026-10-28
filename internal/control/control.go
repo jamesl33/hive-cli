@@ -61,8 +61,9 @@ const (
 	// defaultMinPoints is the fewest readings in the window to trust the rate.
 	defaultMinPoints = 6
 
-	// defaultStale is the 30 minutes of silence after which the valve of a sensor is opened fully.
-	defaultStale = 30 * time.Minute
+	// defaultStale is the 2 hours of silence after which the valve of a sensor is opened fully. The room
+	// sensors report on a change or hourly, so a shorter time opens the valve of a healthy sensor.
+	defaultStale = 2 * time.Hour
 
 	// defaultWriteEvery is the shortest time between writes which open one valve, as they run on batteries.
 	defaultWriteEvery = 5 * time.Minute
