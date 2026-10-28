@@ -1,11 +1,11 @@
 #!/bin/sh
 # Set the Hive thermostat to whatever the schedule says for right now.
 #
-# Reads "HH:MM <temp|off>" lines from $HIVE_SCHEDULE_WEEKDAY (default /etc/hive/schedule.weekday), or on
-# Saturday and Sunday from $HIVE_SCHEDULE_WEEKEND (default /etc/hive/schedule.weekend) when that
-# file exists. Picks the latest
-# slot at or before the current time (wrapping to the last slot of the day before midnight's first
-# slot), then runs 'hive manual <temp>' or 'hive off'. Running it twice is harmless, so it is safe
+# Reads "HH:MM <temp|off>" lines, in time order, from $HIVE_SCHEDULE_WEEKDAY (default
+# /etc/hive/schedule.weekday), or on Saturday and Sunday from $HIVE_SCHEDULE_WEEKEND (default
+# /etc/hive/schedule.weekend) when that file exists. Picks the latest slot at or before the current
+# time (before the first slot, the last slot of yesterday's schedule), then runs
+# 'hive manual <temp>' or 'hive off'. Running it twice is harmless, so it is safe
 # to call from a timer, after a reboot, or by hand.
 #
 # When HIVE_AWAY_MAC is set and hive-presence hasn't seen it for HIVE_AWAY_AFTER seconds (default
@@ -17,12 +17,13 @@
 
 set -eu
 
-schedule=${HIVE_SCHEDULE_WEEKDAY:-/etc/hive/schedule.weekday}
+weekday=${HIVE_SCHEDULE_WEEKDAY:-/etc/hive/schedule.weekday}
 weekend=${HIVE_SCHEDULE_WEEKEND:-/etc/hive/schedule.weekend}
 presence=${HIVE_PRESENCE_FILE:-/var/lib/hive/away-last-seen}
 floor=${HIVE_AWAY_FLOOR:-14}
 away_after=${HIVE_AWAY_AFTER:-1800}
 now=$(date +%H%M)
+dow=$(date +%u)
 
 # Away when hive-presence has not seen $HIVE_AWAY_MAC for $away_after seconds. A missing file
 # counts as home, so a broken probe never cools the house.
@@ -33,45 +34,66 @@ is_away() {
 	[ $(($(date +%s) - seen)) -gt "$away_after" ]
 }
 
-if [ "$(date +%u)" -ge 6 ] && [ -r "$weekend" ]; then
-	schedule=$weekend
-fi
-
-current=""
-last=""
-current_slot=""
-last_slot=""
-
-while read -r slot value _; do
-	case "$slot" in
-		'' | \#*) continue ;;
-	esac
-
-	case "$slot" in
-		[0-2][0-9]:[0-5][0-9]) ;;
-		*) echo "hive-schedule: bad time '$slot' in $schedule" >&2; exit 2 ;;
-	esac
-
-	hm=$(echo "$slot" | tr -d :)
-	last=$value
-	last_slot=$slot
-
-	# Prefix with 1 so 0930 can never be read as octal
-	if [ "1$hm" -le "1$now" ]; then
-		current=$value
-		current_slot=$slot
+# The schedule file for an ISO weekday (1 is Monday)
+file_for() {
+	if [ "$1" -ge 6 ] && [ -r "$weekend" ]; then
+		echo "$weekend"
+	else
+		echo "$weekday"
 	fi
-done <"$schedule"
+}
 
-if [ -z "$last" ]; then
-	echo "hive-schedule: no slots in $schedule" >&2
-	exit 2
-fi
+# Read the slots in file ($1): set current to the value of the latest slot at or before HHMM ($2), or
+# empty if there is none, and last to the value of the final slot. Slots must be in order.
+read_slots() {
+	current=""
+	current_slot=""
+	last=""
+	prev=0
 
-# Before the first slot of the day, yesterday's last slot still applies
+	while read -r slot value _; do
+		case "$slot" in
+			'' | \#*) continue ;;
+		esac
+
+		case "$slot" in
+			[01][0-9]:[0-5][0-9] | 2[0-3]:[0-5][0-9]) ;;
+			*) echo "hive-schedule: bad time '$slot' in $1" >&2; exit 2 ;;
+		esac
+
+		if ! printf '%s\n' "$value" | grep -Eq '^([0-9]+(\.[0-9]+)?|off)$'; then
+			echo "hive-schedule: bad value '$value' for $slot in $1" >&2
+			exit 2
+		fi
+
+		hm=$(echo "$slot" | tr -d :)
+
+		# Prefix with 1 so 0930 can never be read as octal
+		if [ "1$hm" -le "1$prev" ]; then
+			echo "hive-schedule: $slot is not after the slot before it in $1" >&2
+			exit 2
+		fi
+
+		prev=$hm
+		last=$value
+
+		if [ "1$hm" -le "1$2" ]; then
+			current=$value
+			current_slot=$slot
+		fi
+	done <"$1"
+
+	if [ -z "$last" ]; then
+		echo "hive-schedule: no slots in $1" >&2
+		exit 2
+	fi
+}
+
+read_slots "$(file_for "$dow")" "$now"
+
+# Before the first slot of the day, the last slot of yesterday's schedule still applies
 if [ -z "$current" ]; then
-	current=$last
-	current_slot=$last_slot
+	read_slots "$(file_for $(((dow + 5) % 7 + 1)))" 2359
 fi
 
 away=0
