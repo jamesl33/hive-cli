@@ -417,3 +417,13 @@ func TestValidateRooms(t *testing.T) {
 	assert.Error(t, ValidateRooms([]Room{a, {Name: "a", Sensor: "s2", Valve: "v2"}}))
 	assert.Error(t, ValidateRooms([]Room{a, {Name: "b", Sensor: "s2", Valve: "v1"}}))
 }
+
+func TestOpensFullyPastTheWriteStep(t *testing.T) {
+	v := &recorder{}
+	c := rig(v)
+	c.SetOpening("trv_office", 90)
+
+	run(t, c, 30, steady(14.0))
+
+	assert.Equal(t, 100.0, v.set["trv_office"])
+}

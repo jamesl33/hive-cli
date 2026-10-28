@@ -440,10 +440,11 @@ func (c *Controller) opening(err, floor float64) float64 {
 // write is one which makes the house safe, which is not held back by the limits on writes. A close is
 // only held back by the write step, except to the floor, as every minute of delay is overshoot.
 // A valve below the floor is raised to it at once, as the boiler would run against closed valves.
+// Opening fully is never held back by the write step, or a cold room could stop short of fully open.
 func (c *Controller) blocked(rs *roomState, now time.Time, d Decision, floor float64, urgent bool) string {
 	closing := d.Opening < d.Current
 	step := c.cfg.WriteMin
-	if urgent {
+	if urgent || d.Opening == 100 {
 		step = 1
 	}
 
