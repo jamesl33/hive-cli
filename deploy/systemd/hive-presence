@@ -3,8 +3,9 @@
 # $HIVE_AWAY_MAC answers an ARP scan of the local network. hive-schedule treats a file older than
 # $HIVE_AWAY_AFTER as away. Does nothing unless HIVE_AWAY_MAC is set.
 #
-# If the scan itself fails the phone can't be told apart from absent, so it counts as home and the
-# script fails loudly rather than letting the house cool.
+# If the scan fails, or lists no hosts at all (the router always answers, so the interface is dead),
+# the phone can't be told apart from absent, so it counts as home and the script fails loudly
+# rather than letting the house cool.
 
 set -eu
 
@@ -17,6 +18,12 @@ away_after=${HIVE_AWAY_AFTER:-1800}
 if ! scan=$(arp-scan --localnet); then
 	touch "$presence"
 	echo "hive-presence: arp-scan failed, assuming home" >&2
+	exit 1
+fi
+
+if ! echo "$scan" | grep -q '^[0-9]'; then
+	touch "$presence"
+	echo "hive-presence: arp-scan found no hosts, assuming home" >&2
 	exit 1
 fi
 
